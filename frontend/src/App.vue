@@ -5,6 +5,7 @@ import PdfViewer from './components/PdfViewer.vue'
 import ElementPanel from './components/ElementPanel.vue'
 import DetailPanel from './components/DetailPanel.vue'
 import ThumbnailSidebar from './components/ThumbnailSidebar.vue'
+import { getCamelotTables } from './api'
 
 const input = ref(null)
 const pdfViewer = ref(null)
@@ -15,6 +16,30 @@ const showBoxes = ref(true)
 const showTables = ref(true)
 const activeTab = ref('pdfplumber')
 const tableStrategy = ref('text')
+const camelotStrategy = ref('stream')
+const camelotResults = ref({})
+const camelotBusy = ref(false)
+const camelotError = ref('')
+const currentStrategy = computed({
+  get: () => activeTab.value === 'camelot' ? camelotStrategy.value : tableStrategy.value,
+  set: value => { if (activeTab.value === 'camelot') camelotStrategy.value = value; else tableStrategy.value = value },
+})
+let camelotRequest = 0
+watch([activeTab, camelotStrategy, documentId, pageNum], async () => {
+  const request = ++camelotRequest
+  camelotError.value = ''
+  if (activeTab.value !== 'camelot' || !documentId.value || !pageNum.value) return
+  const key = documentId.value + ':' + pageNum.value + ':' + camelotStrategy.value
+  if (camelotResults.value[key]) return
+  camelotBusy.value = true
+  try {
+    const result = await getCamelotTables(documentId.value, pageNum.value, camelotStrategy.value)
+    if (request === camelotRequest) camelotResults.value = { ...camelotResults.value, [key]: result.tables }
+  } catch (err) {
+    if (request === camelotRequest) camelotError.value = err.message || String(err)
+  } finally { if (request === camelotRequest) camelotBusy.value = false }
+})
+const camelotTables = computed(() => camelotResults.value[documentId.value + ':' + pageNum.value + ':' + camelotStrategy.value] || [])
 const search = ref('')
 const selected = ref('')
 const dragActive = ref(false)
@@ -49,20 +74,21 @@ const workspaceStyle = computed(() => ({
 const allItems = computed(() => layout.value ? [
   ...layout.value.lines.map((entry, index) => ({ ...entry, type: 'lines', id: 'line-' + index })),
   ...layout.value.textboxes.map((entry, index) => ({ ...entry, type: 'textboxes', id: 'box-' + index })),
-  ...(layout.value.tables?.[tableStrategy.value] || []).map((entry, index) => ({
-    ...entry, type: 'tables', id: 'table-' + tableStrategy.value + '-' + index,
+  ...(activeTab.value === 'camelot' ? camelotTables.value : layout.value.tables?.[tableStrategy.value] || []).map((entry, index) => ({
+    ...entry, type: 'tables', id: 'table-' + currentStrategy.value + '-' + index,
   })),
 ] : [])
-const visibleItems = computed(() => activeTab.value === 'pdfplumber' ? allItems.value.filter(item =>
+const visibleItems = computed(() => allItems.value.filter(item =>
+  activeTab.value === 'camelot' ? item.type === 'tables' && showTables.value :
   (item.type === 'lines' && showLines.value) ||
   (item.type === 'textboxes' && showBoxes.value) ||
   (item.type === 'tables' && showTables.value)
-) : [])
+))
 const filteredItems = computed(() => visibleItems.value.filter(item =>
   item.text.toLowerCase().includes(search.value.trim().toLowerCase())))
 const selectedItem = computed(() => visibleItems.value.find(item => item.id === selected.value))
 const zoomText = computed(() => pdfViewer.value?.zoomText || '100%')
-watch([layout, tableStrategy, activeTab], () => { selected.value = '' })
+watch([layout, tableStrategy, camelotStrategy, activeTab], () => { selected.value = '' })
 
 let dragging = null
 let dragDepth = 0
@@ -101,7 +127,7 @@ async function copySelectedText() {
 }
 function downloadJson() {
   if (!layout.value) return
-  const blob = new Blob([JSON.stringify(layout.value, null, 2)], { type: 'application/json' })
+  const blob = new Blob([JSON.stringify({ ...layout.value, ...(activeTab.value === 'camelot' ? { camelot: { strategy: camelotStrategy.value, tables: camelotTables.value } } : {}) }, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
@@ -185,9 +211,9 @@ onUnmounted(() => {
 
     <div class="workspace" :style="workspaceStyle">
       <ElementPanel v-show="leftOpen" :layout="layout" :items="filteredItems" :selected="selected"
-        v-model:activeTab="activeTab" v-model:tableStrategy="tableStrategy"
+        v-model:activeTab="activeTab" v-model:tableStrategy="currentStrategy"
         v-model:showLines="showLines" v-model:showBoxes="showBoxes" v-model:showTables="showTables"
-        v-model:search="search" @select="choose($event, true)" />
+        v-model:search="search" :camelotCount="camelotTables.length" :camelotBusy="camelotBusy" :camelotError="camelotError" @select="choose($event, true)" />
       <div v-if="leftOpen" class="splitter" role="separator" aria-label="调整左侧宽度" @pointerdown="startResize('left', $event)"></div>
       <section class="main-area">
         <nav class="toolbar">
@@ -223,7 +249,7 @@ onUnmounted(() => {
         <div class="viewer-footer"><span><span class="footer-dot"></span>{{ status }}</span><span class="shortcuts">Ctrl + 滚轮缩放 <i>·</i> A/D / ← → 翻页 <i>·</i> W/S / ↑ ↓ 竖向滚动</span></div>
       </section>
       <div v-if="rightOpen" class="splitter" role="separator" aria-label="调整右侧宽度" @pointerdown="startResize('right', $event)"></div>
-      <DetailPanel v-show="rightOpen" :layout="layout" :item="selectedItem" :tableStrategy="tableStrategy"
+      <DetailPanel v-show="rightOpen" :layout="layout" :item="selectedItem" :tableStrategy="currentStrategy"
         @export="downloadJson" @copy="copySelectedText" />
     </div>
     <div v-if="busy" class="loading"><span class="spinner"></span> 正在解析 PDF…</div>

@@ -39,6 +39,35 @@ def detect_tables(page, strategy):
     ]
 
 
+@app.get("/api/documents/{document_id}/pages/{number}/camelot/{strategy}")
+def camelot_tables(document_id: str, number: int, strategy: str):
+    if strategy not in {"stream", "network", "lattice", "hybrid"}:
+        raise HTTPException(400, "不支持的 Camelot 策略")
+    record = documents.get(document_id)
+    if not record:
+        raise HTTPException(404, "PDF 不存在，请重新打开")
+    path, pages = record
+    if not 1 <= number <= pages:
+        raise HTTPException(404, "页码超出范围")
+    try:
+        import camelot
+        with pdfplumber.open(path) as pdf:
+            height = float(pdf.pages[number - 1].height)
+        result = camelot.read_pdf(str(path), pages=str(number), flavor=strategy, suppress_stdout=True)
+        tables = []
+        for index, table in enumerate(result):
+            x0, y0, x1, y1 = map(float, table._bbox)
+            data = table.df.fillna("").astype(str).values.tolist()
+            tables.append({
+                "bbox": [round(x0, 2), round(height - y1, 2), round(x1, 2), round(height - y0, 2)],
+                "text": f"Table {index + 1} · {len(data)} rows",
+                "data": data,
+            })
+        return {"tables": tables}
+    except Exception as exc:
+        raise HTTPException(422, f"Camelot {strategy} 解析失败：{exc}") from exc
+
+
 @app.post("/api/documents")
 async def upload_pdf(file: UploadFile = File(...)):
     if Path(file.filename or "").suffix.lower() != ".pdf":

@@ -1,5 +1,5 @@
 <script setup>
-defineProps(['layout', 'items', 'selected', 'activeTab', 'tableStrategy', 'showLines', 'showBoxes', 'showTables', 'search'])
+defineProps(['layout', 'items', 'selected', 'activeTab', 'tableStrategy', 'showLines', 'showBoxes', 'showTables', 'search', 'camelotCount', 'camelotBusy', 'camelotError'])
 const emit = defineEmits(['update:activeTab', 'update:tableStrategy', 'update:showLines', 'update:showBoxes', 'update:showTables', 'update:search', 'select'])
 </script>
 
@@ -7,10 +7,10 @@ const emit = defineEmits(['update:activeTab', 'update:tableStrategy', 'update:sh
   <aside class="inspector element-panel">
     <div class="inspector-head">
       <div class="engine-tabs"><button :class="{active: activeTab === 'pdfplumber'}" @click="emit('update:activeTab', 'pdfplumber')">pdfplumber</button><button :class="{active: activeTab === 'camelot'}" @click="emit('update:activeTab', 'camelot')">Camelot</button></div>
-      <div v-if="activeTab === 'camelot'" class="engine-note">Camelot Stream / Network / Lattice / Hybrid：下一阶段接入。当前可使用 pdfplumber 检测。</div>
+      <div v-if="activeTab === 'camelot'" class="strategy-picker"><label for="camelot-strategy">Table detection</label><select id="camelot-strategy" :value="tableStrategy" @change="emit('update:tableStrategy', $event.target.value)"><option value="stream">Stream</option><option value="network">Network</option><option value="lattice">Lattice</option><option value="hybrid">Hybrid</option></select></div>
       <div v-else class="strategy-picker"><label for="table-strategy">Table detection</label><select id="table-strategy" :value="tableStrategy" @change="emit('update:tableStrategy', $event.target.value)"><option value="lines">lines · 有线表格</option><option value="text">text · 无线表格</option></select></div>
       <div class="inspector-title-row"><h2>布局元素</h2><span class="count-badge">{{ items.length }}</span></div>
-      <p class="panel-subtitle">查找并定位当前页文本结构</p>
+      <p class="panel-subtitle">{{ camelotBusy && activeTab === "camelot" ? "正在运行 Camelot " + tableStrategy + "…" : "查找并定位当前页文本结构" }}</p><p v-if="activeTab === 'camelot' && camelotError" class="engine-note" role="alert">{{ camelotError }}</p>
       <div class="search-wrap">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><path d="m16 16 5 5"></path></svg>
         <input :value="search" @input="emit('update:search', $event.target.value)" aria-label="搜索文字内容" placeholder="搜索文字内容…" :disabled="!layout">
@@ -19,7 +19,7 @@ const emit = defineEmits(['update:activeTab', 'update:tableStrategy', 'update:sh
       <div class="filter-counts">
         <label><input type="checkbox" :checked="showLines" @change="emit('update:showLines', $event.target.checked)"> <span class="legend-dot red"></span> Lines {{ layout?.lines.length ?? 0 }}</label>
         <label><input type="checkbox" :checked="showBoxes" @change="emit('update:showBoxes', $event.target.checked)"> <span class="legend-dot blue"></span> Boxes {{ layout?.textboxes.length ?? 0 }}</label>
-        <label><input type="checkbox" :checked="showTables" @change="emit('update:showTables', $event.target.checked)"> <span class="legend-dot green"></span> Tables {{ layout?.tables?.[tableStrategy]?.length ?? 0 }}</label>
+        <label><input type="checkbox" :checked="showTables" @change="emit('update:showTables', $event.target.checked)"> <span class="legend-dot green"></span> Tables {{ activeTab === 'camelot' ? camelotCount : (layout?.tables?.[tableStrategy]?.length ?? 0) }}</label>
       </div>
     </div>
     <div class="element-list">

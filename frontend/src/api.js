@@ -15,6 +15,10 @@ export async function getPageLayout(id, number) {
   return readResponse(await fetch('/api/documents/' + id + '/pages/' + number))
 }
 
+export async function getCamelotTables(id, number, strategy) {
+  return readResponse(await fetch('/api/documents/' + id + '/pages/' + number + '/camelot/' + strategy))
+}
+
 export async function deleteDocument(id) {
   if (id) await fetch('/api/documents/' + id, { method: 'DELETE' })
 }

@@ -33,7 +33,7 @@ python -m uvicorn backend.app:app --host 127.0.0.1 --port 8766
 - 拖入本地 PDF 或选择文件，上传到本地 FastAPI（不传外网）。
 - PDF.js 使用浏览器直接绘制 PDF；Python 解析每页 **Text Lines** 与 **LTTextBox**，独立叠框。
 - pdfplumber 的 `find_tables()` 支持 `lines` 与 `text` 两种可切换的绿色表格框，附带提取的二维内容、坐标与 JSON 导出。
-- Camelot 标签先保留为待接入占位，Stream / Network / Lattice / Hybrid 尚无真实检测结果。
+- Camelot 1.x 支持 Stream、Network、Lattice、Hybrid 四种按需解析模式；表格框与原 pdfplumber 共用可视化图层、列表和二维数据详情。Camelot 使用 PDF 坐标系，后端会转换为前端的 top 坐标。
 - 双击/点击框，或在右侧搜索、选择文字块；查看原始文字与坐标。
 - `Ctrl+滚轮` 围绕鼠标缩放，适应窗口与 100%。
 - `A/D` 或 `←/→` 翻页，`W/S` 或 `↑/↓` 在当前 PDF 页面竖向滚动。

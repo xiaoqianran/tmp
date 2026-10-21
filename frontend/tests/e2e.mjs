@@ -86,6 +86,7 @@ try {
   await page.waitForFunction(() => document.querySelector('.page-number-input').value === '2')
   console.log('PASS: A/D and arrow keys navigate pages')
 
+  await page.waitForFunction(() => !document.querySelector('.loading'))
   await page.locator('.search-wrap input').fill('Analyte')
   assert((await page.locator('.element-item').count()) > 0)
   await page.locator('.element-item').first().click()
@@ -127,6 +128,21 @@ try {
   await page.getByTitle('切换详情面板').click()
   assert.equal(await page.locator('.splitter:visible').count(), 2)
   console.log('PASS: independent side panels and grid resizing')
+
+  await page.getByRole('button', { name: 'Camelot', exact: true }).click()
+  for (const strategy of ['stream', 'network', 'lattice', 'hybrid']) {
+    await page.locator('#camelot-strategy').selectOption(strategy)
+    await page.waitForFunction(() => !document.querySelector('.panel-subtitle')?.textContent.includes('正在运行 Camelot'), null, { timeout: 30000 })
+    assert.equal(await page.locator('[role="alert"].engine-note').count(), 0, 'Camelot ' + strategy + ' returned error')
+  }
+  await page.locator('#camelot-strategy').selectOption('stream')
+  await page.waitForFunction(() => document.querySelector('.element-item') !== null, null, { timeout: 30000 })
+  assert((await page.locator('.bbox.tables').count()) > 0, 'Camelot Stream should draw table boxes')
+  await page.locator('.element-item').first().click()
+  assert.equal(await page.locator('.detail-chip.tables').count(), 1)
+  await page.getByRole('button', { name: 'pdfplumber', exact: true }).click()
+  assert(await page.locator('#table-strategy').isVisible())
+  console.log('PASS: Camelot Stream/Network/Lattice/Hybrid and bbox/detail UI')
 
   assert.equal(faults.length, 0, faults.join('\n'))
   console.log('ALL BROWSER TESTS PASSED')
