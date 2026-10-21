@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 import pdfplumber
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QEvent, QObject
 from PySide6.QtGui import QColor, QImage, QKeySequence, QPen, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QFileDialog, QFrame, QGraphicsScene,
@@ -64,6 +64,36 @@ def pdf_from_drop(mime):
     return None
 
 
+class Navigation(QObject):
+    """Intercept navigation before list widgets consume arrow keys."""
+    KEYS = {
+        Qt.Key.Key_Left: (True, -1), Qt.Key.Key_A: (True, -1),
+        Qt.Key.Key_Right: (True, 1), Qt.Key.Key_D: (True, 1),
+        Qt.Key.Key_Up: (False, -1), Qt.Key.Key_W: (False, -1),
+        Qt.Key.Key_Down: (False, 1), Qt.Key.Key_S: (False, 1),
+    }
+
+    def __init__(self, window):
+        super().__init__(window)
+        self.window = window
+
+    def eventFilter(self, obj, event):
+        if event.type() != QEvent.Type.KeyPress or not self.window.isActiveWindow():
+            return False
+        if event.modifiers() != Qt.KeyboardModifier.NoModifier:
+            return False
+        focus = QApplication.focusWidget()
+        if focus is None or focus.window() is not self.window:
+            return False
+        if isinstance(focus, (QLineEdit, QTextEdit, QComboBox)):
+            return False
+        movement = self.KEYS.get(event.key())
+        if movement:
+            self.window.pan(*movement)
+            return True
+        return False
+
+
 class PdfView(QGraphicsView):
     """Ctrl + 滚轮绕鼠标缩放；普通滚轮仍然滚动页面。"""
     def __init__(self, scene, parent=None):
@@ -75,19 +105,17 @@ class PdfView(QGraphicsView):
         self.setAcceptDrops(True)
         self.viewport().setAcceptDrops(True)
 
-    def dragEnterEvent(self, event):
-        if pdf_from_drop(event.mimeData()):
-            event.acceptProposedAction()
-
-    def dragMoveEvent(self, event):
-        if pdf_from_drop(event.mimeData()):
-            event.acceptProposedAction()
-
-    def dropEvent(self, event):
-        filename = pdf_from_drop(event.mimeData())
-        if filename:
-            self.window().open_pdf(filename)
-            event.acceptProposedAction()
+    def viewportEvent(self, event):
+        # QGraphicsView forwards drag events to the scene, where pixmap items
+        # may discard them. Handle PDF files at the viewport before forwarding.
+        if event.type() in (QEvent.Type.DragEnter, QEvent.Type.DragMove, QEvent.Type.Drop):
+            filename = pdf_from_drop(event.mimeData())
+            if filename:
+                event.acceptProposedAction()
+                if event.type() == QEvent.Type.Drop:
+                    self.window().open_pdf(filename)
+                return True
+        return super().viewportEvent(event)
 
     def wheelEvent(self, event):
         if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
@@ -230,21 +258,11 @@ class Viewer(QMainWindow):
         QShortcut(QKeySequence("Alt+Left"), self, activated=lambda: self.turn(-1))
         QShortcut(QKeySequence("Alt+Right"), self, activated=lambda: self.turn(1))
         QShortcut(QKeySequence("Ctrl+0"), self, activated=lambda: self.zoom.setCurrentIndex(0))
-        for key, horizontal, direction in (
-            ("Left", True, -1), ("A", True, -1),
-            ("Right", True, 1), ("D", True, 1),
-            ("W", False, -1), ("S", False, 1),
-        ):
-            shortcut = QShortcut(QKeySequence(key), self)
-            shortcut.activated.connect(
-                lambda h=horizontal, d=direction: self.pan(h, d)
-            )
+        self.navigation = Navigation(self)
+        QApplication.instance().installEventFilter(self.navigation)
         self.update_buttons()
 
     def pan(self, horizontal, direction):
-        # 搜索框和其他输入控件有焦点时，保留正常打字操作。
-        if isinstance(QApplication.focusWidget(), (QLineEdit, QTextEdit, QComboBox)):
-            return
         bar = self.view.horizontalScrollBar() if horizontal else self.view.verticalScrollBar()
         bar.setValue(bar.value() + direction * 90)
 
@@ -424,6 +442,7 @@ class Viewer(QMainWindow):
             event.acceptProposedAction()
 
     def closeEvent(self, event):
+        QApplication.instance().removeEventFilter(self.navigation)
         if self.pdf:
             self.pdf.close()
         super().closeEvent(event)
