@@ -19,6 +19,10 @@ export async function getCamelotTables(id, number, strategy) {
   return readResponse(await fetch('/api/documents/' + id + '/pages/' + number + '/camelot/' + strategy))
 }
 
+export async function getDocLayoutTables(id, number, threshold) {
+  return readResponse(await fetch('/api/documents/' + id + '/pages/' + number + '/doclayout?threshold=' + threshold))
+}
+
 export async function deleteDocument(id) {
   if (id) await fetch('/api/documents/' + id, { method: 'DELETE' })
 }

@@ -28,6 +28,12 @@ python -m uvicorn backend.app:app --host 127.0.0.1 --port 8766
 - `src/api.js`：FastAPI 请求接口。
 - `src/style.css`：既有三栏界面全局样式。
 
+## PP-DocLayout-M ONNX（CPU 表格定位）
+
+第三个标签页 `PP-DocLayout-M` 只绘制模型预测的 **table bbox + confidence**，不做 OCR、行列或单元格结构化。当前页按需推理，置信度阈值默认 0.50，可调整 0.10～0.95；点击检测框可在右侧查看位置与置信度。PDF 页首先经 pypdfium2 渲染为图像，再用 RapidDoc 来源的独立 ONNXRuntime 推理组件定位表格，最后将像素框映射回 PDF 坐标。
+
+模型权重存放 `models/pp_doclayout_m.onnx`，PC1 已下载；新环境首次执行 `start.bat` 时下载并校验 SHA256，以后可离线运行。下载来源：RapidAI/RapidDoc 在 ModelScope 的 PP-DocLayout-M ONNX。轻量推理组件来自 Apache-2.0 的 RapidAI/RapidDoc（参见 `backend/rapid_layout_self/LICENSE.txt`）。
+
 ## 能力
 
 - 拖入本地 PDF 或选择文件，上传到本地 FastAPI（不传外网）。

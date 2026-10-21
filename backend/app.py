@@ -39,6 +39,23 @@ def detect_tables(page, strategy):
     ]
 
 
+@app.get("/api/documents/{document_id}/pages/{number}/doclayout")
+def doclayout_tables(document_id: str, number: int, threshold: float = 0.5):
+    if not 0.1 <= threshold <= 0.95:
+        raise HTTPException(400, "置信度阈值必须在 0.10 到 0.95 之间")
+    record = documents.get(document_id)
+    if not record:
+        raise HTTPException(404, "PDF 不存在，请重新打开")
+    path, pages = record
+    if not 1 <= number <= pages:
+        raise HTTPException(404, "页码超出范围")
+    try:
+        from .layout_detector import find_tables
+        return {"tables": find_tables(path, number, threshold)}
+    except Exception as exc:
+        raise HTTPException(422, f"PP-DocLayout-M 推理失败：{exc}") from exc
+
+
 @app.get("/api/documents/{document_id}/pages/{number}/camelot/{strategy}")
 def camelot_tables(document_id: str, number: int, strategy: str):
     if strategy not in {"stream", "network", "lattice", "hybrid"}:

@@ -11,9 +11,9 @@ const emit = defineEmits(['export', 'copy'])
     </div>
     <div v-if="item" class="detail-body">
       <div class="detail-chip" :class="item.type">{{ item.type === 'lines' ? 'Text Line' : item.type === 'tables' ? 'Table · ' + tableStrategy : 'LTTextBox' }}</div>
-      <div class="section-label">完整文字</div>
+      <template v-if="item.score !== undefined"><div class="section-label">表格定位置信度</div><div class="detail-content">{{ (item.score * 100).toFixed(1) }}%</div></template><div class="section-label">{{ item.score !== undefined ? "检测结果" : "完整文字" }}</div>
       <div class="detail-content">{{ item.text }}</div>
-      <template v-if="item.type === 'tables'"><div class="section-label">提取的表格结构</div><pre class="detail-content table-data">{{ JSON.stringify(item.data, null, 2) }}</pre></template>
+      <template v-if="item.type === 'tables' && item.score === undefined"><div class="section-label">提取的表格结构</div><pre class="detail-content table-data">{{ JSON.stringify(item.data, null, 2) }}</pre></template>
       <div class="section-label">边界坐标 · BBox</div>
       <div class="bbox-grid">
         <div v-for="(axis, index) in ['x0','top','x1','bottom']" :key="axis"><span>{{ axis }}</span><strong>{{ item.bbox[index].toFixed(2) }}</strong></div>

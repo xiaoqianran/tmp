@@ -5,7 +5,7 @@ import PdfViewer from './components/PdfViewer.vue'
 import ElementPanel from './components/ElementPanel.vue'
 import DetailPanel from './components/DetailPanel.vue'
 import ThumbnailSidebar from './components/ThumbnailSidebar.vue'
-import { getCamelotTables } from './api'
+import { getCamelotTables, getDocLayoutTables } from './api'
 
 const input = ref(null)
 const pdfViewer = ref(null)
@@ -20,8 +20,28 @@ const camelotStrategy = ref('stream')
 const camelotResults = ref({})
 const camelotBusy = ref(false)
 const camelotError = ref('')
+const doclayoutThreshold = ref(0.5)
+const doclayoutResults = ref({})
+const doclayoutBusy = ref(false)
+const doclayoutError = ref('')
+let doclayoutRequest = 0
+watch([activeTab, documentId, pageNum, doclayoutThreshold], async () => {
+  const request = ++doclayoutRequest
+  doclayoutError.value = ''
+  if (activeTab.value !== 'doclayout' || !documentId.value || !pageNum.value) return
+  const key = documentId.value + ':' + pageNum.value + ':' + doclayoutThreshold.value
+  if (doclayoutResults.value[key]) return
+  doclayoutBusy.value = true
+  try {
+    const result = await getDocLayoutTables(documentId.value, pageNum.value, doclayoutThreshold.value)
+    if (request === doclayoutRequest) doclayoutResults.value = { ...doclayoutResults.value, [key]: result.tables }
+  } catch (err) {
+    if (request === doclayoutRequest) doclayoutError.value = err.message || String(err)
+  } finally { if (request === doclayoutRequest) doclayoutBusy.value = false }
+})
+const doclayoutTables = computed(() => doclayoutResults.value[documentId.value + ':' + pageNum.value + ':' + doclayoutThreshold.value] || [])
 const currentStrategy = computed({
-  get: () => activeTab.value === 'camelot' ? camelotStrategy.value : tableStrategy.value,
+  get: () => activeTab.value === 'doclayout' ? 'PP-DocLayout-M' : activeTab.value === 'camelot' ? camelotStrategy.value : tableStrategy.value,
   set: value => { if (activeTab.value === 'camelot') camelotStrategy.value = value; else tableStrategy.value = value },
 })
 let camelotRequest = 0
@@ -79,12 +99,12 @@ const workspaceStyle = computed(() => ({
 const allItems = computed(() => layout.value ? [
   ...layout.value.lines.map((entry, index) => ({ ...entry, type: 'lines', id: 'line-' + index })),
   ...layout.value.textboxes.map((entry, index) => ({ ...entry, type: 'textboxes', id: 'box-' + index })),
-  ...(activeTab.value === 'camelot' ? camelotTables.value : layout.value.tables?.[tableStrategy.value] || []).map((entry, index) => ({
+  ...(activeTab.value === 'doclayout' ? doclayoutTables.value : activeTab.value === 'camelot' ? camelotTables.value : layout.value.tables?.[tableStrategy.value] || []).map((entry, index) => ({
     ...entry, type: 'tables', id: 'table-' + currentStrategy.value + '-' + index,
   })),
 ] : [])
 const visibleItems = computed(() => allItems.value.filter(item =>
-  activeTab.value === 'camelot' ? item.type === 'tables' && showTables.value :
+  activeTab.value !== 'pdfplumber' ? item.type === 'tables' && showTables.value :
   (item.type === 'lines' && showLines.value) ||
   (item.type === 'textboxes' && showBoxes.value) ||
   (item.type === 'tables' && showTables.value)
@@ -132,7 +152,7 @@ async function copySelectedText() {
 }
 function downloadJson() {
   if (!layout.value) return
-  const blob = new Blob([JSON.stringify({ ...layout.value, ...(activeTab.value === 'camelot' ? { camelot: { strategy: camelotStrategy.value, tables: camelotTables.value } } : {}) }, null, 2)], { type: 'application/json' })
+  const blob = new Blob([JSON.stringify({ ...layout.value, ...(activeTab.value === 'camelot' ? { camelot: { strategy: camelotStrategy.value, tables: camelotTables.value } } : {}), ...(activeTab.value === 'doclayout' ? { doclayout: { model: 'PP-DocLayout-M ONNX', threshold: doclayoutThreshold.value, tables: doclayoutTables.value } } : {}) }, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
@@ -218,7 +238,9 @@ onUnmounted(() => {
       <ElementPanel v-show="leftOpen" :layout="layout" :items="filteredItems" :selected="selected"
         v-model:activeTab="activeTab" v-model:tableStrategy="currentStrategy"
         v-model:showLines="showLines" v-model:showBoxes="showBoxes" v-model:showTables="showTables"
-        v-model:search="search" :camelotCount="camelotTables.length" :camelotBusy="camelotBusy" :camelotError="camelotError" @select="choose($event, true)" />
+        v-model:search="search" :camelotCount="camelotTables.length" :camelotBusy="camelotBusy" :camelotError="camelotError"
+        :doclayoutCount="doclayoutTables.length" :doclayoutBusy="doclayoutBusy" :doclayoutError="doclayoutError"
+        v-model:doclayoutThreshold="doclayoutThreshold" @select="choose($event, true)" />
       <div v-if="leftOpen" class="splitter" role="separator" aria-label="调整左侧宽度" @pointerdown="startResize('left', $event)"></div>
       <section class="main-area">
         <nav class="toolbar">

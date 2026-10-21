@@ -5,3 +5,5 @@ frontend/node_modules/
 frontend/dist/
 frontend/tests/screenshot-test.png
 *.log
+models/*.onnx
+models/*.download
