@@ -130,6 +130,11 @@ try {
   console.log('PASS: independent side panels and grid resizing')
 
   await page.getByRole('button', { name: 'Camelot', exact: true }).click()
+  await page.locator('.search-wrap input').fill('definitely-not-a-table')
+  await page.getByRole('button', { name: 'pdfplumber', exact: true }).click()
+  await page.getByRole('button', { name: 'Camelot', exact: true }).click()
+  assert.equal(await page.locator('.search-wrap input').inputValue(), '')
+  assert.equal(await page.locator('.filter-counts label').count(), 1)
   for (const strategy of ['stream', 'network', 'lattice', 'hybrid']) {
     await page.locator('#camelot-strategy').selectOption(strategy)
     await page.waitForFunction(() => !document.querySelector('.panel-subtitle')?.textContent.includes('正在运行 Camelot'), null, { timeout: 30000 })

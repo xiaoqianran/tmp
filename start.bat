@@ -11,12 +11,10 @@ if not exist ".venv\Scripts\activate.bat" (
 
 call ".venv\Scripts\activate.bat"
 
-REM Install Python packages on first launch
-if not exist ".venv\Lib\site-packages\fastapi" (
-    echo [INFO] Installing Python dependencies...
-    uv pip install -r requirements.txt
-    if errorlevel 1 (pause & exit /b 1)
-)
+REM Synchronize dependencies after requirements.txt changes (uv skips installed packages)
+echo [INFO] Checking Python dependencies...
+uv pip install -r requirements.txt
+if errorlevel 1 (pause & exit /b 1)
 
 REM Build Vue frontend
 echo Building frontend...

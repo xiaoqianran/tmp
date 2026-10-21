@@ -17,8 +17,8 @@ const emit = defineEmits(['update:activeTab', 'update:tableStrategy', 'update:sh
         <button v-if="search" class="clear-search" aria-label="清除搜索" @click="emit('update:search', '')">×</button>
       </div>
       <div class="filter-counts">
-        <label><input type="checkbox" :checked="showLines" @change="emit('update:showLines', $event.target.checked)"> <span class="legend-dot red"></span> Lines {{ layout?.lines.length ?? 0 }}</label>
-        <label><input type="checkbox" :checked="showBoxes" @change="emit('update:showBoxes', $event.target.checked)"> <span class="legend-dot blue"></span> Boxes {{ layout?.textboxes.length ?? 0 }}</label>
+        <label v-if="activeTab === 'pdfplumber'"><input type="checkbox" :checked="showLines" @change="emit('update:showLines', $event.target.checked)"> <span class="legend-dot red"></span> Lines {{ layout?.lines.length ?? 0 }}</label>
+        <label v-if="activeTab === 'pdfplumber'"><input type="checkbox" :checked="showBoxes" @change="emit('update:showBoxes', $event.target.checked)"> <span class="legend-dot blue"></span> Boxes {{ layout?.textboxes.length ?? 0 }}</label>
         <label><input type="checkbox" :checked="showTables" @change="emit('update:showTables', $event.target.checked)"> <span class="legend-dot green"></span> Tables {{ activeTab === 'camelot' ? camelotCount : (layout?.tables?.[tableStrategy]?.length ?? 0) }}</label>
       </div>
     </div>
@@ -29,7 +29,7 @@ const emit = defineEmits(['update:activeTab', 'update:tableStrategy', 'update:sh
           <span class="element-text"><span class="element-preview">{{ item.text }}</span><span class="element-type">{{ item.type === 'lines' ? 'TEXT LINE' : item.type === 'tables' ? 'TABLE · ' + tableStrategy.toUpperCase() : 'LT TEXT BOX' }}</span></span>
         </button>
       </template>
-      <div v-else class="list-empty">{{ layout ? '没有匹配的文字元素' : '打开 PDF 后显示布局候选' }}</div>
+      <div v-else class="list-empty">{{ activeTab === 'camelot' ? (camelotBusy ? '正在识别当前页表格…' : camelotError ? '解析失败，请查看上方错误' : !showTables ? '请勾选 Tables 以显示检测结果' : '当前页使用 ' + tableStrategy.toUpperCase() + ' 未检测到表格，可尝试其他策略') : layout ? '没有匹配的文字元素' : '打开 PDF 后显示布局候选' }}</div>
     </div>
   </aside>
 </template>

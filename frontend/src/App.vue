@@ -41,6 +41,11 @@ watch([activeTab, camelotStrategy, documentId, pageNum], async () => {
 })
 const camelotTables = computed(() => camelotResults.value[documentId.value + ':' + pageNum.value + ':' + camelotStrategy.value] || [])
 const search = ref('')
+watch([activeTab, currentStrategy], () => {
+  search.value = ''
+  selected.value = ''
+  showTables.value = true
+})
 const selected = ref('')
 const dragActive = ref(false)
 const leftOpen = ref(true)
