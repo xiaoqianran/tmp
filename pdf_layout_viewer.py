@@ -1,141 +1,318 @@
-"""Windows CPU PDF layout viewer. Install: pip install PySide6 pdfplumber"""
+"""单文件 PDF Layout 调试器。Windows CPU；pip install PySide6 pdfplumber"""
 import json
 import sys
 from pathlib import Path
 
 import pdfplumber
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QImage, QPen, QPixmap
+from PySide6.QtGui import QColor, QImage, QKeySequence, QPen, QPixmap, QShortcut
 from PySide6.QtWidgets import (
-    QApplication, QFileDialog, QGraphicsScene, QGraphicsView, QHBoxLayout,
-    QLabel, QListWidget, QMainWindow, QMessageBox, QPushButton, QSplitter,
-    QTextEdit, QVBoxLayout, QWidget,
+    QApplication, QCheckBox, QComboBox, QFileDialog, QFrame, QGraphicsScene,
+    QGraphicsView, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
+    QMainWindow, QMessageBox, QPushButton, QSplitter, QTextEdit, QVBoxLayout, QWidget,
 )
 
+STYLE = """
+QWidget { font-family: 'Microsoft YaHei UI', 'Segoe UI'; font-size: 13px; color: #233047; }
+QMainWindow, QWidget#root { background: #F4F6FA; }
+QFrame#header { background: #FFFFFF; border-bottom: 1px solid #E5E9F0; }
+QFrame#panel { background: #FFFFFF; border: 1px solid #E5E9F0; border-radius: 12px; }
+QLabel#brand { font-size: 19px; font-weight: 700; color: #111C31; }
+QLabel#section { font-size: 14px; font-weight: 700; color: #1B2B45; }
+QLabel#muted { color: #8190A6; font-size: 12px; }
+QLabel#filename { font-weight: 600; color: #24334A; }
+QPushButton { padding: 8px 13px; background: #FFFFFF; border: 1px solid #DEE5EF; border-radius: 8px; }
+QPushButton:hover { background: #F1F5FB; border-color: #BECDE1; }
+QPushButton:pressed { background: #E8EFFA; }
+QPushButton#primary { background: #356DE8; border-color: #356DE8; color: white; font-weight: 600; }
+QPushButton#primary:hover { background: #245BD6; }
+QPushButton:disabled { color: #B1BBCA; background: #F6F8FB; }
+QLineEdit, QComboBox { padding: 8px 10px; background: #F9FAFC; border: 1px solid #E0E6EF; border-radius: 8px; }
+QLineEdit:focus { border-color: #7CA6F6; }
+QListWidget { background: #FFFFFF; border: none; outline: none; }
+QListWidget::item { padding: 10px 10px; border-bottom: 1px solid #F0F2F6; }
+QListWidget::item:selected { background: #EDF3FF; color: #234FA6; border-radius: 6px; }
+QListWidget::item:hover { background: #F5F8FF; }
+QTextEdit { background: #F8FAFD; border: 1px solid #EBEFF5; border-radius: 8px; padding: 9px; }
+QCheckBox { spacing: 7px; }
+QSplitter::handle { background: transparent; width: 10px; }
+QGraphicsView { border: none; background: #DDE4EF; }
+"""
 
-def extract(page):
-    def collect(objects):
+
+def read_layout(page):
+    def convert(objects):
         return [
-            {"text": o["text"].strip(), "bbox": [float(o[k]) for k in ("x0", "top", "x1", "bottom")]}
-            for o in objects if o.get("text", "").strip()
+            {"text": obj.get("text", "").strip(),
+             "bbox": [round(float(obj[k]), 2) for k in ("x0", "top", "x1", "bottom")]}
+            for obj in objects if obj.get("text", "").strip()
         ]
     return {
         "page": page.page_number,
-        "lines": collect(page.extract_text_lines(strip=True, return_chars=False)),
-        "textboxes": collect(page.objects.get("textboxhorizontal", [])
+        "size": [page.width, page.height],
+        "lines": convert(page.extract_text_lines(strip=True, return_chars=False)),
+        "textboxes": convert(page.objects.get("textboxhorizontal", [])
                              + page.objects.get("textboxvertical", [])),
     }
 
 
 class Viewer(QMainWindow):
+    COLORS = {"lines": "#F36565", "textboxes": "#4387F5"}
+    TITLES = {"lines": "Text Line", "textboxes": "LTTextBox"}
+
     def __init__(self):
         super().__init__()
-        self.resize(1200, 800)
-        self.setWindowTitle("PDF Layout — pdfplumber vs pdfminer.six")
+        self.resize(1400, 880)
+        self.setMinimumSize(900, 570)
+        self.setWindowTitle("PDF Layout Inspector")
+        self.setAcceptDrops(True)
         self.pdf = None
         self.data = None
-        self.index = 0
-        self.boxes = []
+        self.page_index = 0
+        self.entries = []
+        self.scale = 2
 
-        toolbar = QHBoxLayout()
-        self.info = QLabel("打开一个 PDF")
-        for title, action in (
-            ("打开 PDF", self.open_pdf), ("上一页", lambda: self.turn(-1)),
-            ("下一页", lambda: self.turn(1)), ("导出 JSON", self.export),
-        ):
-            button = QPushButton(title)
-            button.clicked.connect(action)
-            toolbar.addWidget(button)
-        toolbar.addWidget(self.info, 1)
-
-        self.scene = QGraphicsScene()
-        self.view = QGraphicsView(self.scene)
-        self.view.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
-        self.items = QListWidget()
-        self.items.currentRowChanged.connect(self.select)
-        self.detail = QTextEdit(readOnly=True)
-
-        side = QWidget()
-        side_layout = QVBoxLayout(side)
-        side_layout.addWidget(QLabel("红框：pdfplumber 行；蓝框：pdfminer LTTextBox"))
-        side_layout.addWidget(self.items, 3)
-        side_layout.addWidget(self.detail, 2)
-
-        split = QSplitter()
-        split.addWidget(self.view)
-        split.addWidget(side)
-        split.setSizes([800, 400])
-        root = QWidget()
-        root_layout = QVBoxLayout(root)
-        root_layout.addLayout(toolbar)
-        root_layout.addWidget(split)
+        root = QWidget(objectName="root")
+        body = QVBoxLayout(root)
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(0)
         self.setCentralWidget(root)
 
+        header = QFrame(objectName="header")
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(24, 15, 24, 15)
+        header_layout.setSpacing(12)
+        header_layout.addWidget(QLabel("◈  PDF Layout", objectName="brand"))
+        header_layout.addWidget(QLabel("INSPECTOR  /  CPU", objectName="muted"))
+        header_layout.addStretch()
+        self.file_label = QLabel("尚未打开文件", objectName="filename")
+        header_layout.addWidget(self.file_label)
+        self.open_btn = QPushButton("＋  打开 PDF", objectName="primary")
+        self.open_btn.clicked.connect(self.open_pdf)
+        header_layout.addWidget(self.open_btn)
+        body.addWidget(header)
+
+        controls = QHBoxLayout()
+        controls.setContentsMargins(24, 14, 24, 14)
+        controls.setSpacing(9)
+        self.prev_btn = QPushButton("←")
+        self.next_btn = QPushButton("→")
+        self.prev_btn.clicked.connect(lambda: self.turn(-1))
+        self.next_btn.clicked.connect(lambda: self.turn(1))
+        self.page_label = QLabel("— / —")
+        self.page_label.setMinimumWidth(86)
+        self.page_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        controls.addWidget(self.prev_btn)
+        controls.addWidget(self.page_label)
+        controls.addWidget(self.next_btn)
+        controls.addSpacing(18)
+        self.lines_check = QCheckBox("Text Lines")
+        self.boxes_check = QCheckBox("LTTextBox")
+        self.lines_check.setChecked(True)
+        self.boxes_check.setChecked(True)
+        self.lines_check.toggled.connect(self.redraw)
+        self.boxes_check.toggled.connect(self.redraw)
+        controls.addWidget(self.lines_check)
+        controls.addWidget(self.boxes_check)
+        controls.addStretch()
+        controls.addWidget(QLabel("缩放", objectName="muted"))
+        self.zoom = QComboBox()
+        self.zoom.addItems(["适应窗口", "75%", "100%", "125%", "150%", "200%"])
+        self.zoom.currentIndexChanged.connect(self.apply_zoom)
+        controls.addWidget(self.zoom)
+        self.export_btn = QPushButton("导出 JSON")
+        self.export_btn.clicked.connect(self.export)
+        controls.addWidget(self.export_btn)
+        body.addLayout(controls)
+
+        splitter = QSplitter()
+        splitter.setChildrenCollapsible(False)
+        body.addWidget(splitter, 1)
+        viewer_panel = QFrame(objectName="panel")
+        viewer_layout = QVBoxLayout(viewer_panel)
+        viewer_layout.setContentsMargins(0, 0, 0, 0)
+        viewer_layout.setSpacing(0)
+        self.scene = QGraphicsScene()
+        self.view = QGraphicsView(self.scene)
+        self.view.setRenderHints(self.view.renderHints())
+        self.view.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+        viewer_layout.addWidget(self.view)
+        splitter.addWidget(viewer_panel)
+
+        side = QFrame(objectName="panel")
+        side.setMinimumWidth(300)
+        side_layout = QVBoxLayout(side)
+        side_layout.setContentsMargins(18, 18, 18, 18)
+        side_layout.setSpacing(12)
+        side_layout.addWidget(QLabel("布局元素", objectName="section"))
+        self.count_label = QLabel("打开 PDF 后查看布局候选", objectName="muted")
+        side_layout.addWidget(self.count_label)
+        self.search = QLineEdit()
+        self.search.setPlaceholderText("搜索文字内容…")
+        self.search.textChanged.connect(self.filter_items)
+        side_layout.addWidget(self.search)
+        self.items = QListWidget()
+        self.items.currentItemChanged.connect(self.select_item)
+        side_layout.addWidget(self.items, 3)
+        side_layout.addWidget(QLabel("选中元素", objectName="section"))
+        self.detail = QTextEdit()
+        self.detail.setReadOnly(True)
+        self.detail.setPlaceholderText("点击上方文字元素，查看完整内容与坐标")
+        side_layout.addWidget(self.detail, 2)
+        legend = QLabel("●  红色：pdfplumber 行       ●  蓝色：pdfminer 文本块", objectName="muted")
+        side_layout.addWidget(legend)
+        splitter.addWidget(side)
+        splitter.setSizes([920, 420])
+        splitter.setStretchFactor(0, 3)
+        splitter.setStretchFactor(1, 1)
+
+        self.footer = QLabel("  就绪  ·  支持拖放 PDF  ·  Ctrl+O 打开  ·  ←/→ 翻页", objectName="muted")
+        body.addWidget(self.footer)
+        QShortcut(QKeySequence("Ctrl+O"), self, activated=self.open_pdf)
+        QShortcut(QKeySequence("Ctrl+S"), self, activated=self.export)
+        QShortcut(QKeySequence("Alt+Left"), self, activated=lambda: self.turn(-1))
+        QShortcut(QKeySequence("Alt+Right"), self, activated=lambda: self.turn(1))
+        self.update_buttons()
+
     def open_pdf(self, filename=None):
-        if not filename:
-            filename, _ = QFileDialog.getOpenFileName(self, "选择 PDF", "", "PDF (*.pdf)")
+        if not filename or isinstance(filename, bool):
+            filename, _ = QFileDialog.getOpenFileName(self, "打开 PDF", "", "PDF Files (*.pdf)")
         if not filename:
             return
         try:
             pdf = pdfplumber.open(filename, laparams={})
             if not pdf.pages:
-                raise ValueError("空 PDF")
+                raise ValueError("PDF 没有页面")
         except Exception as exc:
-            QMessageBox.warning(self, "打开失败", str(exc))
+            QMessageBox.warning(self, "无法打开 PDF", str(exc))
             return
         if self.pdf:
             self.pdf.close()
-        self.pdf, self.filename, self.index = pdf, filename, 0
+        self.pdf = pdf
+        self.filename = filename
+        self.page_index = 0
+        self.file_label.setText(Path(filename).name)
+        self.file_label.setToolTip(filename)
+        self.search.clear()
         self.show_page()
 
-    def turn(self, step):
+    def update_buttons(self):
+        self.prev_btn.setEnabled(bool(self.pdf and self.page_index > 0))
+        self.next_btn.setEnabled(bool(self.pdf and self.page_index < len(self.pdf.pages) - 1))
+        self.export_btn.setEnabled(self.data is not None)
+
+    def turn(self, delta):
         if self.pdf:
-            self.index = max(0, min(self.index + step, len(self.pdf.pages) - 1))
-            self.show_page()
+            index = max(0, min(self.page_index + delta, len(self.pdf.pages) - 1))
+            if index != self.page_index:
+                self.page_index = index
+                self.show_page()
 
     def show_page(self):
         if not self.pdf:
             return
         try:
-            page = self.pdf.pages[self.index]
-            self.data = extract(page)
+            page = self.pdf.pages[self.page_index]
+            data = read_layout(page)
             image = page.to_image(resolution=144).original.convert("RGBA")
             qimage = QImage(image.tobytes(), image.width, image.height,
                             QImage.Format.Format_RGBA8888).copy()
+            self.data = data
             self.scene.clear()
             self.scene.addPixmap(QPixmap.fromImage(qimage))
-            self.boxes.clear()
+            self.entries.clear()
             self.items.clear()
-            for source, color in (("lines", "#e34444"), ("textboxes", "#267bf2")):
-                for item in self.data[source]:
-                    x0, y0, x1, y1 = item["bbox"]
-                    rect = self.scene.addRect(x0*2, y0*2, (x1-x0)*2, (y1-y0)*2,
-                                              QPen(QColor(color), 1.5))
-                    self.boxes.append((item, rect, color))
-                    preview = item["text"].replace("\n", " ")[:80]
-                    self.items.addItem(f"[{source}] {preview}")
-            self.info.setText(f"{Path(self.filename).name} | {self.index+1}/{len(self.pdf.pages)}")
-            self.view.fitInView(self.scene.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
+            self.detail.clear()
+            for source in ("lines", "textboxes"):
+                for item in data[source]:
+                    x0, top, x1, bottom = item["bbox"]
+                    rect = self.scene.addRect(x0*2, top*2, (x1-x0)*2, (bottom-top)*2)
+                    row = QListWidgetItem(f"{self.TITLES[source]}   ·   {item['text'].replace(chr(10), ' ')[:85]}")
+                    row.setData(Qt.ItemDataRole.UserRole, len(self.entries))
+                    self.entries.append((source, item, rect))
+                    self.items.addItem(row)
+            self.page_label.setText(f"{self.page_index+1} / {len(self.pdf.pages)}")
+            self.count_label.setText(f"{len(data['lines'])} 条文字行   ·   {len(data['textboxes'])} 个文本块")
+            self.filter_items(self.search.text())
+            self.redraw()
+            self.apply_zoom()
+            self.update_buttons()
+            self.footer.setText(f"  {Path(self.filename).name}   ·   第 {self.page_index+1} 页   ·   原生字符解析（非 OCR）")
         except Exception as exc:
-            QMessageBox.warning(self, "解析失败", str(exc))
+            QMessageBox.warning(self, "页面解析失败", str(exc))
 
-    def select(self, index):
-        if index < 0 or index >= len(self.boxes):
+    def redraw(self):
+        if not self.data:
             return
-        for _, rect, color in self.boxes:
-            rect.setPen(QPen(QColor(color), 1.5))
-        item, rect, _ = self.boxes[index]
-        rect.setPen(QPen(QColor("#ffcc00"), 3))
+        for source, _, rect in self.entries:
+            enabled = self.lines_check.isChecked() if source == "lines" else self.boxes_check.isChecked()
+            rect.setVisible(enabled)
+            color = QColor(self.COLORS[source])
+            rect.setPen(QPen(color, 1.6 if source == "textboxes" else 1))
+        selected = self.items.currentItem()
+        if selected:
+            self.highlight(selected.data(Qt.ItemDataRole.UserRole))
+
+    def filter_items(self, value):
+        keyword = value.strip().lower()
+        for i in range(self.items.count()):
+            row = self.items.item(i)
+            index = row.data(Qt.ItemDataRole.UserRole)
+            source, item, _ = self.entries[index]
+            visible = keyword in item["text"].lower()
+            row.setHidden(not visible)
+
+    def select_item(self, current, previous):
+        if previous:
+            index = previous.data(Qt.ItemDataRole.UserRole)
+            if 0 <= index < len(self.entries):
+                source, _, rect = self.entries[index]
+                rect.setPen(QPen(QColor(self.COLORS[source]), 1.6))
+        if current:
+            self.highlight(current.data(Qt.ItemDataRole.UserRole))
+
+    def highlight(self, index):
+        source, item, rect = self.entries[index]
+        checkbox = self.lines_check if source == "lines" else self.boxes_check
+        if not checkbox.isChecked():
+            checkbox.setChecked(True)
+        rect.setPen(QPen(QColor("#E9A23B"), 3))
         self.view.centerOn(rect)
-        self.detail.setPlainText(item["text"] + "\n\nBBox: " + str(item["bbox"]))
+        self.detail.setPlainText(item["text"] + "\n\nBBox (pt): " + str(item["bbox"]))
+
+    def apply_zoom(self):
+        if not self.data:
+            return
+        self.view.resetTransform()
+        if self.zoom.currentIndex() == 0:
+            self.view.fitInView(self.scene.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
+        else:
+            factor = [0, .75, 1, 1.25, 1.5, 2][self.zoom.currentIndex()]
+            self.view.scale(factor, factor)
 
     def export(self):
         if not self.data:
             return
-        name = f"{Path(self.filename).stem}_page_{self.index+1}.json"
-        target, _ = QFileDialog.getSaveFileName(self, "保存 JSON", name, "JSON (*.json)")
-        if target:
-            Path(target).write_text(json.dumps(self.data, ensure_ascii=False, indent=2), encoding="utf-8")
+        name = f"{Path(self.filename).stem}_page_{self.page_index+1}.json"
+        filename, _ = QFileDialog.getSaveFileName(self, "导出 JSON", name, "JSON (*.json)")
+        if filename:
+            Path(filename).write_text(json.dumps(self.data, ensure_ascii=False, indent=2), encoding="utf-8")
+            self.footer.setText(f"  已导出：{filename}")
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls() and any(
+            url.isLocalFile() and url.toLocalFile().lower().endswith(".pdf")
+            for url in event.mimeData().urls()
+        ):
+            event.acceptProposedAction()
+
+    def dropEvent(self, event):
+        for url in event.mimeData().urls():
+            filename = url.toLocalFile()
+            if filename.lower().endswith(".pdf"):
+                self.open_pdf(filename)
+                event.acceptProposedAction()
+                break
 
     def closeEvent(self, event):
         if self.pdf:
@@ -145,6 +322,8 @@ class Viewer(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    app.setStyle("Fusion")
+    app.setStyleSheet(STYLE)
     window = Viewer()
     if len(sys.argv) > 1:
         window.open_pdf(sys.argv[1])
