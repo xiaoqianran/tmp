@@ -21,6 +21,7 @@ python -m uvicorn backend.app:app --host 127.0.0.1 --port 8766
 
 - `src/App.vue`：三栏布局、快捷键与共享状态。
 - `src/components/PdfViewer.vue`：PDF.js Canvas、缩放、表格与文字标注框。
+- `src/components/ThumbnailSidebar.vue`：阅读器内部 170px 页面缩略图栏（默认展开、视口懒渲染、有限缓存、点击跳转）。
 - `src/components/ElementPanel.vue`：左侧策略选择、搜索和元素列表。
 - `src/components/DetailPanel.vue`：右侧选中元素详情与 JSON 导出入口。
 - `src/composables/usePdf.js`：文档状态、翻页请求、旧请求失效处理。

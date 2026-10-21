@@ -16,6 +16,10 @@ export function usePdf(renderPage) {
   const status = ref('本地运行 · Windows CPU · 文件不会上传至互联网')
   let pdfDocument = null
   let requestId = 0
+  function getPdfPage(number) {
+    if (!pdfDocument) throw new Error('PDF 尚未打开')
+    return pdfDocument.getPage(number)
+  }
 
   async function loadPage(number, first = false) {
     if (!pdfDocument || !documentId.value || number < 1 || number > pageCount.value) return
@@ -85,5 +89,5 @@ export function usePdf(renderPage) {
     if (oldPdf) oldPdf.destroy().catch(() => {})
   }
 
-  return { docName, documentId, pageCount, pageNum, layout, busy, error, status, openPdf, loadPage, closePdf }
+  return { docName, documentId, pageCount, pageNum, layout, busy, error, status, openPdf, loadPage, closePdf, getPdfPage }
 }

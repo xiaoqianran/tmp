@@ -4,10 +4,11 @@ import { usePdf } from './composables/usePdf'
 import PdfViewer from './components/PdfViewer.vue'
 import ElementPanel from './components/ElementPanel.vue'
 import DetailPanel from './components/DetailPanel.vue'
+import ThumbnailSidebar from './components/ThumbnailSidebar.vue'
 
 const input = ref(null)
 const pdfViewer = ref(null)
-const { docName, documentId, pageCount, pageNum, layout, busy, error, status, openPdf: openDocument, loadPage, closePdf } =
+const { docName, documentId, pageCount, pageNum, layout, busy, error, status, openPdf: openDocument, loadPage, closePdf, getPdfPage } =
   usePdf((page, first, stale) => pdfViewer.value.renderPage(page, first, stale))
 const showLines = ref(true)
 const showBoxes = ref(true)
@@ -19,6 +20,23 @@ const selected = ref('')
 const dragActive = ref(false)
 const leftOpen = ref(true)
 const rightOpen = ref(true)
+const thumbnailsOpen = ref(true)
+const pageInput = ref('1')
+const pageInputError = ref(false)
+watch(pageNum, number => { pageInput.value = String(number || 1); pageInputError.value = false })
+function jumpToPage() {
+  const value = Number(pageInput.value)
+  if (!Number.isInteger(value) || value < 1 || value > pageCount.value) {
+    pageInputError.value = true
+    return
+  }
+  pageInputError.value = false
+  loadPage(value)
+}
+function resetPageInput() {
+  pageInput.value = String(pageNum.value || 1)
+  pageInputError.value = false
+}
 const leftWidth = ref(290)
 const rightWidth = ref(320)
 const workspaceStyle = computed(() => ({
@@ -175,10 +193,12 @@ onUnmounted(() => {
         <nav class="toolbar">
           <div class="tools-left">
             <button class="icon-button panel-toggle" title="切换元素列表" @click="leftOpen = !leftOpen">☷</button>
+            <button class="icon-button panel-toggle thumbnail-toggle" title="切换页面预览" :aria-pressed="thumbnailsOpen" @click="thumbnailsOpen = !thumbnailsOpen">▤</button>
             <div class="page-controls">
               <button class="icon-button" title="上一页 (A / ←)" :disabled="pageNum <= 1 || !documentId" @click="loadPage(pageNum - 1)">‹</button>
-              <span class="page-indicator"><strong>{{ pageNum || '—' }}</strong><i>/</i>{{ pageCount || '—' }}</span>
+              <span class="page-indicator"><input class="page-number-input" :class="{ invalid: pageInputError }" type="number" min="1" :max="pageCount" :disabled="!documentId" aria-label="页码输入" v-model="pageInput" @keydown.enter="jumpToPage" @keydown.esc="resetPageInput"><strong class="sr-only">{{ pageNum || '—' }}</strong><i>/</i>{{ pageCount || '—' }}</span>
               <button class="icon-button" title="下一页 (D / →)" :disabled="pageNum >= pageCount || !documentId" @click="loadPage(pageNum + 1)">›</button>
+              <button class="button subtle page-jump" :disabled="!documentId" @click="jumpToPage">跳转</button>
             </div>
             <div class="bar-divider"></div>
             <label class="toggle-toggle"><input type="checkbox" v-model="showLines"><span class="legend-dot red"></span>Text Lines</label>
@@ -194,8 +214,12 @@ onUnmounted(() => {
             <button class="button subtle" :disabled="!layout" @click="pdfViewer?.setZoom(1)">100%</button>
           </div>
         </nav>
-        <PdfViewer ref="pdfViewer" :layout="layout" :items="visibleItems" :selected="selected"
-          :status="status" @select="choose" @open="input?.click()" />
+        <div class="pdf-reading-space">
+          <ThumbnailSidebar v-if="thumbnailsOpen" :documentId="documentId" :pageCount="pageCount"
+            :pageNum="pageNum" :getPage="getPdfPage" @navigate="loadPage" />
+          <PdfViewer ref="pdfViewer" :layout="layout" :items="visibleItems" :selected="selected"
+            :status="status" @select="choose" @open="input?.click()" />
+        </div>
         <div class="viewer-footer"><span><span class="footer-dot"></span>{{ status }}</span><span class="shortcuts">Ctrl + 滚轮缩放 <i>·</i> A/D / ← → 翻页 <i>·</i> W/S / ↑ ↓ 竖向滚动</span></div>
       </section>
       <div v-if="rightOpen" class="splitter" role="separator" aria-label="调整右侧宽度" @pointerdown="startResize('right', $event)"></div>
