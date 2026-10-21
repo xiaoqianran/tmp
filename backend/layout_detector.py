@@ -1,6 +1,7 @@
 """CPU-only PP-DocLayout-M ONNX table localization; no OCR or table structure parsing."""
 from functools import lru_cache
 from pathlib import Path
+from threading import Lock
 
 import numpy as np
 import cv2
@@ -9,6 +10,7 @@ import pypdfium2 as pdfium
 from .rapid_layout_self import ModelType, RapidLayout, RapidLayoutInput
 
 MODEL_PATH = Path(__file__).resolve().parents[1] / "models" / "pp_doclayout_m.onnx"
+_inference_lock = Lock()
 
 
 @lru_cache(maxsize=1)
@@ -27,7 +29,9 @@ def find_tables(path: Path, page_number: int, threshold: float = 0.5):
         page = pdf[page_number - 1]
         width, height = page.get_size()
         image = cv2.cvtColor(np.asarray(page.render(scale=2).to_pil().convert("RGB")), cv2.COLOR_RGB2BGR)
-    result = detector()([image])[0]
+    # 同时保护首次模型初始化及后续推理，避免 CPU ONNX 并发争用。
+    with _inference_lock:
+        result = detector()([image])[0]
     scale_x = width / image.shape[1]
     scale_y = height / image.shape[0]
     tables = []
@@ -43,3 +47,4 @@ def find_tables(path: Path, page_number: int, threshold: float = 0.5):
             "data": [],
         })
     return tables
+

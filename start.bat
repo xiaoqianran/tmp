@@ -32,5 +32,7 @@ if errorlevel 1 (popd & pause & exit /b 1)
 popd
 
 echo Open http://127.0.0.1:8766
+set PYTHONFAULTHANDLER=1
 python -m uvicorn backend.app:app --host 127.0.0.1 --port 8766
+echo [INFO] Backend process exit code: %ERRORLEVEL%
 pause

@@ -1,8 +1,8 @@
 onnxruntime:
     io_binding: true
     mask_uint8: true
-    intra_op_num_threads: -1
-    inter_op_num_threads: -1
+    intra_op_num_threads: 4
+    inter_op_num_threads: 1
     enable_cpu_mem_arena: false
 
     cpu_ep_cfg:
@@ -36,3 +36,4 @@ openvino:
     num_streams: -1
     enable_hyper_threading: null
     scheduling_core_type: null
+
