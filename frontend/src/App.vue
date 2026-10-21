@@ -254,6 +254,16 @@ function choose(item, center = false) {
   }
 }
 
+async function copySelectedText() {
+  if (!selectedItem.value) return
+  try {
+    await navigator.clipboard.writeText(selectedItem.value.text)
+    status.value = '已复制元素文字'
+  } catch {
+    error.value = '复制失败，请检查浏览器剪贴板权限'
+  }
+}
+
 function downloadJson() {
   if (!layout.value) return
   const blob = new Blob([JSON.stringify(layout.value, null, 2)], { type: 'application/json' })
@@ -464,7 +474,7 @@ onUnmounted(() => {
           <div class="bbox-grid">
             <div v-for="(axis, index) in ['x0','top','x1','bottom']" :key="axis"><span>{{ axis }}</span><strong>{{ selectedItem.bbox[index].toFixed(2) }}</strong></div>
           </div>
-          <button class="button subtle copy-detail" @click="navigator.clipboard.writeText(selectedItem.text)">复制文字</button>
+          <button class="button subtle copy-detail" @click="copySelectedText">复制文字</button>
         </div>
         <div v-else class="detail-placeholder">点击中间 PDF 标注框，或在左侧元素列表中选取条目。</div>
       </aside>
