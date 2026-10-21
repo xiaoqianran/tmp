@@ -1,0 +1,21 @@
+{
+  "name": "pdf-layout-inspector",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "test:e2e": "node tests/e2e.mjs",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "pdfjs-dist": "^5.4.0",
+    "vue": "^3.5.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.0",
+    "playwright-core": "^1.64.1",
+    "vite": "^7.0.0"
+  }
+}
