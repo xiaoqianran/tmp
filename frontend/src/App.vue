@@ -276,22 +276,21 @@ function onKeyDown(event) {
     downloadJson()
     return
   }
-  if (event.altKey && (event.code === 'ArrowLeft' || event.code === 'ArrowRight')) {
+  if (event.altKey || event.ctrlKey || event.metaKey || !viewer.value || !layout.value) return
+  if (event.code === 'ArrowLeft' || event.code === 'KeyA') {
     event.preventDefault()
-    loadPage(pageNum.value + (event.code === 'ArrowLeft' ? -1 : 1))
+    loadPage(pageNum.value - 1)
     return
   }
-  if (event.altKey || event.ctrlKey || event.metaKey || !viewer.value || !layout.value) return
-  const moves = {
-    ArrowLeft: [-90, 0], KeyA: [-90, 0],
-    ArrowRight: [90, 0], KeyD: [90, 0],
-    ArrowUp: [0, -90], KeyW: [0, -90],
-    ArrowDown: [0, 90], KeyS: [0, 90],
-  }
-  const delta = moves[event.code]
-  if (delta) {
+  if (event.code === 'ArrowRight' || event.code === 'KeyD') {
     event.preventDefault()
-    viewer.value.scrollBy({ left: delta[0], top: delta[1], behavior: 'instant' })
+    loadPage(pageNum.value + 1)
+    return
+  }
+  const vertical = { ArrowUp: -90, KeyW: -90, ArrowDown: 90, KeyS: 90 }[event.code]
+  if (vertical !== undefined) {
+    event.preventDefault()
+    viewer.value.scrollBy({ top: vertical, behavior: 'instant' })
   }
 }
 
@@ -389,7 +388,7 @@ onUnmounted(() => {
         </div>
         <div class="viewer-footer">
           <span><span class="footer-dot"></span>{{ status }}</span>
-          <span class="shortcuts">Ctrl + 滚轮缩放 <i>·</i> WASD / 方向键移动 <i>·</i> Alt + ← → 翻页</span>
+          <span class="shortcuts">Ctrl + 滚轮缩放 <i>·</i> A/D / ← → 翻页 <i>·</i> W/S / ↑ ↓ 竖向滚动</span>
         </div>
       </section>
 
