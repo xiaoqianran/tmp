@@ -195,14 +195,30 @@ class Viewer(QMainWindow):
         splitter.setStretchFactor(0, 3)
         splitter.setStretchFactor(1, 1)
 
-        self.footer = QLabel("  就绪  ·  支持拖放 PDF  ·  Ctrl+O 打开  ·  ←/→ 翻页", objectName="muted")
+        self.footer = QLabel("  就绪  ·  ←/A →/D 左右移动  ·  W/S 上下移动  ·  Alt+方向键翻页", objectName="muted")
         body.addWidget(self.footer)
         QShortcut(QKeySequence("Ctrl+O"), self, activated=self.open_pdf)
         QShortcut(QKeySequence("Ctrl+S"), self, activated=self.export)
         QShortcut(QKeySequence("Alt+Left"), self, activated=lambda: self.turn(-1))
         QShortcut(QKeySequence("Alt+Right"), self, activated=lambda: self.turn(1))
         QShortcut(QKeySequence("Ctrl+0"), self, activated=lambda: self.zoom.setCurrentIndex(0))
+        for key, horizontal, direction in (
+            ("Left", True, -1), ("A", True, -1),
+            ("Right", True, 1), ("D", True, 1),
+            ("W", False, -1), ("S", False, 1),
+        ):
+            shortcut = QShortcut(QKeySequence(key), self)
+            shortcut.activated.connect(
+                lambda h=horizontal, d=direction: self.pan(h, d)
+            )
         self.update_buttons()
+
+    def pan(self, horizontal, direction):
+        # 搜索框和其他输入控件有焦点时，保留正常打字操作。
+        if isinstance(QApplication.focusWidget(), (QLineEdit, QTextEdit, QComboBox)):
+            return
+        bar = self.view.horizontalScrollBar() if horizontal else self.view.verticalScrollBar()
+        bar.setValue(bar.value() + direction * 90)
 
     def open_pdf(self, filename=None):
         if not filename or isinstance(filename, bool):
@@ -267,7 +283,7 @@ class Viewer(QMainWindow):
             self.redraw()
             self.apply_zoom()
             self.update_buttons()
-            self.footer.setText(f"  {Path(self.filename).name}   ·   第 {self.page_index+1} 页   ·   Ctrl+滚轮缩放  ·   双击文字框选中")
+            self.footer.setText(f"  第 {self.page_index+1} 页   ·   ←→ / A D 左右移动   ·   W S 上下移动   ·   Ctrl+滚轮缩放   ·   Alt+←→ 翻页")
         except Exception as exc:
             QMessageBox.warning(self, "页面解析失败", str(exc))
 
