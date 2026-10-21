@@ -23,7 +23,7 @@ python -m uvicorn backend.app:app --host 127.0.0.1 --port 8765
 - PDF.js 使用浏览器直接绘制 PDF；Python 解析每页 **Text Lines** 与 **LTTextBox**，独立叠框。
 - 双击/点击框，或在右侧搜索、选择文字块；查看原始文字与坐标。
 - `Ctrl+滚轮` 围绕鼠标缩放，适应窗口与 100%。
-- `A/D` 或左右方向键水平滚动，`W/S` 或上下方向键垂直滚动；`Alt+左右` 翻页。
+- `A/D` 或 `←/→` 翻页，`W/S` 或 `↑/↓` 在当前 PDF 页面竖向滚动。
 - 导出当前页 JSON。
 
 端到端回归：先启动 uvicorn，再在 `frontend` 运行 `npm run test:e2e`。测试使用仓库自带的 3 页 PDF 和本机 Chrome/Edge（不下载浏览器），覆盖上传、PDF.js 渲染、Ctrl+滚轮、WASD、翻页、搜索、导出和 HTML5 拖放。若测试服务端口不是 8765，可设置 `TEST_URL=http://127.0.0.1:端口` 环境变量。
