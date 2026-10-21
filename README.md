@@ -10,10 +10,10 @@ cd frontend
 npm install
 npm run build
 cd ..
-python -m uvicorn backend.app:app --host 127.0.0.1 --port 8765
+python -m uvicorn backend.app:app --host 127.0.0.1 --port 8766
 ```
 
-浏览器打开 **http://127.0.0.1:8767**。安装依赖后也可运行 `start.bat`。需要 Python 3.11+、Node.js 20.19+（仅安装/构建前端时使用）。
+浏览器打开 **http://127.0.0.1:8766**。安装依赖后也可运行 `start.bat`。需要 Python 3.11+、Node.js 20.19+（仅安装/构建前端时使用）。
 
 开发模式：一个终端启动上面的 uvicorn，另一个终端 `cd frontend && npm run dev`（Vite 代理 /api）。
 
@@ -21,12 +21,14 @@ python -m uvicorn backend.app:app --host 127.0.0.1 --port 8765
 
 - 拖入本地 PDF 或选择文件，上传到本地 FastAPI（不传外网）。
 - PDF.js 使用浏览器直接绘制 PDF；Python 解析每页 **Text Lines** 与 **LTTextBox**，独立叠框。
+- pdfplumber 的 `find_tables()` 支持 `lines` 与 `text` 两种可切换的绿色表格框，附带提取的二维内容、坐标与 JSON 导出。
+- Camelot 标签先保留为待接入占位，Stream / Network / Lattice / Hybrid 尚无真实检测结果。
 - 双击/点击框，或在右侧搜索、选择文字块；查看原始文字与坐标。
 - `Ctrl+滚轮` 围绕鼠标缩放，适应窗口与 100%。
 - `A/D` 或 `←/→` 翻页，`W/S` 或 `↑/↓` 在当前 PDF 页面竖向滚动。
 - 导出当前页 JSON。
 
-端到端回归：先启动 uvicorn，再在 `frontend` 运行 `npm run test:e2e`。测试使用仓库自带的 3 页 PDF 和本机 Chrome/Edge（不下载浏览器），覆盖上传、PDF.js 渲染、Ctrl+滚轮、WASD、翻页、搜索、导出和 HTML5 拖放。若测试服务端口不是 8765，可设置 `TEST_URL=http://127.0.0.1:端口` 环境变量。
+端到端回归：先启动 uvicorn，再在 `frontend` 运行 `npm run test:e2e`。测试使用仓库自带的 3 页 PDF 和本机 Chrome/Edge（不下载浏览器），覆盖上传、PDF.js 渲染、Ctrl+滚轮、WASD、翻页、搜索、导出和 HTML5 拖放。若测试服务端口不是 8766，可设置 `TEST_URL=http://127.0.0.1:端口` 环境变量。
 
 PDF 文件保存在系统临时目录：打开新文件时删除上一个 PDF，服务器进程退出时清理所有剩余文件。不提供 OCR，也不自行重新实现文字行分组算法。
 
