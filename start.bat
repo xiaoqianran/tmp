@@ -1,16 +1,24 @@
 @echo off
+chcp 65001 >nul
 cd /d "%~dp0"
 
-REM 激活虚拟环境
-if exist ".venv\Scripts\activate.bat" (
-    call ".venv\Scripts\activate.bat"
-) else (
-    echo [ERROR] 未找到 .venv 虚拟环境
-    pause
-    exit /b 1
+REM Create Python environment on first launch
+if not exist ".venv\Scripts\activate.bat" (
+    echo [INFO] Creating Python environment...
+    uv venv --seed
+    if errorlevel 1 (pause & exit /b 1)
 )
 
-REM 每次都构建前端
+call ".venv\Scripts\activate.bat"
+
+REM Install Python packages on first launch
+if not exist ".venv\Lib\site-packages\fastapi" (
+    echo [INFO] Installing Python dependencies...
+    uv pip install -r requirements.txt
+    if errorlevel 1 (pause & exit /b 1)
+)
+
+REM Build Vue frontend
 echo Building frontend...
 pushd frontend
 if not exist "node_modules" (
