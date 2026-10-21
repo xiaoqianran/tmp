@@ -25,6 +25,32 @@ const pageWidth = ref(0)
 const pageHeight = ref(0)
 const dragActive = ref(false)
 const fitActive = ref(true)
+const leftOpen = ref(true)
+const rightOpen = ref(true)
+const leftWidth = ref(290)
+const rightWidth = ref(320)
+const workspaceStyle = computed(() => ({
+  gridTemplateColumns: `${leftOpen.value ? leftWidth.value + 'px' : '0px'} 6px minmax(0, 1fr) 6px ${rightOpen.value ? rightWidth.value + 'px' : '0px'}`,
+}))
+let dragging = null
+function startResize(side, event) {
+  event.preventDefault()
+  dragging = { side, x: event.clientX, width: side === 'left' ? leftWidth.value : rightWidth.value }
+  window.addEventListener('pointermove', resizeMove)
+  window.addEventListener('pointerup', stopResize, { once: true })
+}
+function resizeMove(event) {
+  if (!dragging) return
+  const delta = event.clientX - dragging.x
+  const width = Math.max(210, Math.min(540, dragging.width + (dragging.side === 'left' ? delta : -delta)))
+  if (dragging.side === 'left') leftWidth.value = width
+  else rightWidth.value = width
+}
+function stopResize() {
+  dragging = null
+  window.removeEventListener('pointermove', resizeMove)
+}
+
 
 let pdfDocument = null
 let renderTask = null
@@ -114,6 +140,7 @@ async function openPdf(file) {
 async function loadPage(number, first = false) {
   if (!pdfDocument || !documentId.value || number < 1 || number > pageCount.value) return
   const current = ++requestId
+  pageNum.value = number
   busy.value = true
   error.value = ''
   try {
@@ -124,7 +151,6 @@ async function loadPage(number, first = false) {
     const result = await readResponse(response)
     if (current !== requestId) return
     const viewport = page.getViewport({ scale: PDF_SCALE })
-    pageNum.value = number
     layout.value = result
     selected.value = ''
     pageWidth.value = viewport.width
@@ -276,14 +302,16 @@ function onKeyDown(event) {
     downloadJson()
     return
   }
-  if (event.altKey || event.ctrlKey || event.metaKey || !viewer.value || !layout.value) return
+  if (event.altKey || event.ctrlKey || event.metaKey || !viewer.value || !pdfDocument) return
   if (event.code === 'ArrowLeft' || event.code === 'KeyA') {
     event.preventDefault()
+    event.stopPropagation()
     loadPage(pageNum.value - 1)
     return
   }
   if (event.code === 'ArrowRight' || event.code === 'KeyD') {
     event.preventDefault()
+    event.stopPropagation()
     loadPage(pageNum.value + 1)
     return
   }
@@ -301,7 +329,7 @@ onMounted(() => {
   window.addEventListener('dragleave', onDragLeave)
   window.addEventListener('dragover', onDragOver)
   window.addEventListener('drop', onDrop)
-  window.addEventListener('keydown', onKeyDown)
+  window.addEventListener('keydown', onKeyDown, true)
 })
 onUnmounted(() => {
   observer?.disconnect()
@@ -309,7 +337,8 @@ onUnmounted(() => {
   window.removeEventListener('dragleave', onDragLeave)
   window.removeEventListener('dragover', onDragOver)
   window.removeEventListener('drop', onDrop)
-  window.removeEventListener('keydown', onKeyDown)
+  window.removeEventListener('keydown', onKeyDown, true)
+  stopResize()
   if (renderTask) renderTask.cancel()
   if (pdfDocument) pdfDocument.destroy()
 })
@@ -334,20 +363,49 @@ onUnmounted(() => {
       </div>
     </header>
 
-    <div class="workspace">
+    <div class="workspace" :style="workspaceStyle">
+      <aside v-show="leftOpen" class="inspector element-panel">
+        <div class="inspector-head">
+          <div class="inspector-title-row"><h2>布局元素</h2><span class="count-badge">{{ filteredItems.length }}</span></div>
+          <p class="panel-subtitle">查找并定位当前页文本结构</p>
+          <div class="search-wrap">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><path d="m16 16 5 5"></path></svg>
+            <input v-model="search" aria-label="搜索文字内容" placeholder="搜索文字内容…" :disabled="!layout">
+            <button v-if="search" class="clear-search" aria-label="清除搜索" @click="search=''">×</button>
+          </div>
+          <div class="filter-counts">
+            <label><input type="checkbox" v-model="showLines"> <span class="legend-dot red"></span> Lines {{ layout?.lines.length ?? 0 }}</label>
+            <label><input type="checkbox" v-model="showBoxes"> <span class="legend-dot blue"></span> Boxes {{ layout?.textboxes.length ?? 0 }}</label>
+          </div>
+        </div>
+        <div class="element-list">
+          <template v-if="filteredItems.length">
+            <button v-for="(item, index) in filteredItems" :key="item.id" class="element-item"
+              :class="{ active: selected === item.id }" @click="choose(item, true)">
+              <span class="element-index">{{ String(index + 1).padStart(2, '0') }}</span>
+              <span class="element-text">
+                <span class="element-preview">{{ item.text }}</span>
+                <span class="element-type">{{ item.type === 'lines' ? 'TEXT LINE' : 'LT TEXT BOX' }}</span>
+              </span>
+            </button>
+          </template>
+          <div v-else class="list-empty">{{ layout ? '没有匹配的文字元素' : '打开 PDF 后显示布局候选' }}</div>
+        </div>
+      </aside>
+      <div class="splitter" role="separator" aria-label="调整左侧宽度" @pointerdown="startResize('left', $event)"></div>
       <section class="main-area">
         <nav class="toolbar">
-          <div class="tools-left">
+          <div class="tools-left"><button class="icon-button panel-toggle" title="切换元素列表" @click="leftOpen = !leftOpen">☷</button>
             <div class="page-controls">
-              <button class="icon-button" title="上一页 (Alt+←)" :disabled="pageNum <= 1 || busy" @click="loadPage(pageNum-1)">‹</button>
+              <button class="icon-button" title="上一页 (A / ←)" :disabled="pageNum <= 1 || !documentId" @click="loadPage(pageNum-1)">‹</button>
               <span class="page-indicator"><strong>{{ pageNum || '—' }}</strong><i>/</i>{{ pageCount || '—' }}</span>
-              <button class="icon-button" title="下一页 (Alt+→)" :disabled="pageNum >= pageCount || busy" @click="loadPage(pageNum+1)">›</button>
+              <button class="icon-button" title="下一页 (D / →)" :disabled="pageNum >= pageCount || !documentId" @click="loadPage(pageNum+1)">›</button>
             </div>
             <div class="bar-divider"></div>
             <label class="toggle-toggle"><input type="checkbox" v-model="showLines"><span class="legend-dot red"></span>Text Lines</label>
             <label class="toggle-toggle"><input type="checkbox" v-model="showBoxes"><span class="legend-dot blue"></span>LTTextBox</label>
           </div>
-          <div class="tools-right">
+          <div class="tools-right"><button class="icon-button panel-toggle" title="切换详情面板" @click="rightOpen = !rightOpen">☷</button>
             <button class="icon-button zoom-btn" :disabled="!layout" title="缩小" @click="setZoom(zoom / 1.15)">−</button>
             <span class="zoom-number">{{ zoomText }}</span>
             <button class="icon-button zoom-btn" :disabled="!layout" title="放大" @click="setZoom(zoom * 1.15)">+</button>
@@ -392,49 +450,23 @@ onUnmounted(() => {
         </div>
       </section>
 
-      <aside class="inspector">
-        <div class="inspector-head">
-          <div class="inspector-kicker">DOCUMENT ANALYSIS</div>
-          <div class="inspector-title-row"><h2>布局元素</h2><span class="count-badge">{{ filteredItems.length }}</span></div>
-          <p>比较 pdfplumber 与 pdfminer.six 的文本分组</p>
-          <div class="stats">
-            <div><span class="stat-number">{{ layout?.lines.length ?? 0 }}</span><span>Text Lines</span></div>
-            <div><span class="stat-number">{{ layout?.textboxes.length ?? 0 }}</span><span>LTTextBox</span></div>
-          </div>
-          <div class="search-wrap">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><path d="m16 16 5 5"></path></svg>
-            <input v-model="search" aria-label="搜索文字内容" placeholder="搜索文字内容…" :disabled="!layout">
-            <kbd v-if="!search">TEXT</kbd>
-            <button v-else class="clear-search" aria-label="清除搜索" @click="search=''">×</button>
-          </div>
+      <div class="splitter" role="separator" aria-label="调整右侧宽度" @pointerdown="startResize('right', $event)"></div>
+      <aside v-show="rightOpen" class="inspector detail-sidebar">
+        <div class="detail-title">
+          <div><h2>元素详情</h2><p class="panel-subtitle">选中标注后显示完整内容和坐标</p></div>
+          <button class="export-link" :disabled="!layout" @click="downloadJson()">导出 JSON ↗</button>
         </div>
-
-        <div class="element-list">
-          <template v-if="filteredItems.length">
-            <button v-for="item in filteredItems" :key="item.id" class="element-item"
-              :class="{ active: selected === item.id }" @click="choose(item, true)">
-              <span class="element-bar" :class="item.type"></span>
-              <span class="element-text">
-                <span class="element-type">{{ item.type === 'lines' ? 'TEXT LINE' : 'LT TEXT BOX' }}</span>
-                <span class="element-preview">{{ item.text }}</span>
-              </span>
-              <span class="element-chevron">›</span>
-            </button>
-          </template>
-          <div v-else class="list-empty">{{ layout ? '没有匹配的文字元素' : '打开 PDF 后显示布局候选' }}</div>
-        </div>
-        <div class="detail-panel">
-          <div class="detail-title">
-            <strong>元素详情</strong>
-            <button class="export-link" :disabled="!layout" @click="downloadJson()">导出 JSON ↗</button>
+        <div v-if="selectedItem" class="detail-body">
+          <div class="detail-chip" :class="selectedItem.type">{{ selectedItem.type === 'lines' ? 'Text Line' : 'LTTextBox' }}</div>
+          <div class="section-label">完整文字</div>
+          <div class="detail-content">{{ selectedItem.text }}</div>
+          <div class="section-label">边界坐标 · BBox</div>
+          <div class="bbox-grid">
+            <div v-for="(axis, index) in ['x0','top','x1','bottom']" :key="axis"><span>{{ axis }}</span><strong>{{ selectedItem.bbox[index].toFixed(2) }}</strong></div>
           </div>
-          <template v-if="selectedItem">
-            <div class="detail-chip" :class="selectedItem.type">{{ selectedItem.type === 'lines' ? 'Text Line' : 'LTTextBox' }}</div>
-            <div class="detail-content">{{ selectedItem.text }}</div>
-            <div class="bbox-info">BBox <code>{{ selectedItem.bbox.map(n => n.toFixed(1)).join(' , ') }}</code></div>
-          </template>
-          <div v-else class="detail-placeholder">点击页面标注或右侧文字，查看完整内容与坐标。</div>
+          <button class="button subtle copy-detail" @click="navigator.clipboard.writeText(selectedItem.text)">复制文字</button>
         </div>
+        <div v-else class="detail-placeholder">点击中间 PDF 标注框，或在左侧元素列表中选取条目。</div>
       </aside>
     </div>
 
