@@ -56,6 +56,14 @@ def read_layout(page):
     }
 
 
+def pdf_from_drop(mime):
+    for url in mime.urls():
+        filename = url.toLocalFile()
+        if url.isLocalFile() and filename.lower().endswith(".pdf"):
+            return filename
+    return None
+
+
 class PdfView(QGraphicsView):
     """Ctrl + 滚轮绕鼠标缩放；普通滚轮仍然滚动页面。"""
     def __init__(self, scene, parent=None):
@@ -64,6 +72,22 @@ class PdfView(QGraphicsView):
         self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
         self.on_zoom = None
         self.on_pick = None
+        self.setAcceptDrops(True)
+        self.viewport().setAcceptDrops(True)
+
+    def dragEnterEvent(self, event):
+        if pdf_from_drop(event.mimeData()):
+            event.acceptProposedAction()
+
+    def dragMoveEvent(self, event):
+        if pdf_from_drop(event.mimeData()):
+            event.acceptProposedAction()
+
+    def dropEvent(self, event):
+        filename = pdf_from_drop(event.mimeData())
+        if filename:
+            self.window().open_pdf(filename)
+            event.acceptProposedAction()
 
     def wheelEvent(self, event):
         if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
@@ -165,6 +189,10 @@ class Viewer(QMainWindow):
         self.view.on_pick = self.pick_at
         self.view.setRenderHints(self.view.renderHints())
         self.view.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+        self.empty_hint = self.scene.addText("将 PDF 拖到这里\n或点击右上角「打开 PDF」")
+        self.empty_hint.setDefaultTextColor(QColor("#6F8098"))
+        self.empty_hint.setPos(80, 80)
+        self.scene.setSceneRect(0, 0, 650, 450)
         viewer_layout.addWidget(self.view)
         splitter.addWidget(viewer_panel)
 
@@ -382,19 +410,18 @@ class Viewer(QMainWindow):
             self.footer.setText(f"  已导出：{filename}")
 
     def dragEnterEvent(self, event):
-        if event.mimeData().hasUrls() and any(
-            url.isLocalFile() and url.toLocalFile().lower().endswith(".pdf")
-            for url in event.mimeData().urls()
-        ):
+        if pdf_from_drop(event.mimeData()):
+            event.acceptProposedAction()
+
+    def dragMoveEvent(self, event):
+        if pdf_from_drop(event.mimeData()):
             event.acceptProposedAction()
 
     def dropEvent(self, event):
-        for url in event.mimeData().urls():
-            filename = url.toLocalFile()
-            if filename.lower().endswith(".pdf"):
-                self.open_pdf(filename)
-                event.acceptProposedAction()
-                break
+        filename = pdf_from_drop(event.mimeData())
+        if filename:
+            self.open_pdf(filename)
+            event.acceptProposedAction()
 
     def closeEvent(self, event):
         if self.pdf:
