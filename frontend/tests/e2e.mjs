@@ -6,7 +6,7 @@ import { chromium } from 'playwright-core'
 
 const root = dirname(fileURLToPath(import.meta.url))
 const pdf = resolve(process.argv[2] || resolve(root, 'fixture.pdf'))
-const url = process.env.TEST_URL || 'http://127.0.0.1:8767'
+const url = process.env.TEST_URL || 'http://127.0.0.1:8766'
 const chrome = process.env.CHROME_PATH || [
   'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
   'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
@@ -30,7 +30,7 @@ try {
     const c = document.querySelector('.paper canvas')
     return c && c.width > 0 && !document.querySelector('.loading')
   }, null, { timeout: 30000 })
-  assert.match(await page.locator('.inspector').innerText(), /Analyte/)
+  assert.match(await page.locator('.element-panel').innerText(), /Analyte/)
   assert.equal((await page.locator('.page-indicator strong').innerText()).trim(), '1')
   console.log('PASS: upload + PDF.js render + pdfplumber fields')
   await page.screenshot({ path: resolve(root, 'screenshot-test.png') })
@@ -96,6 +96,19 @@ try {
   await page.getByText('drag-test.pdf', { exact: false }).first().waitFor({ timeout: 30000 })
   await page.locator('.paper canvas').waitFor({ state: 'visible' })
   console.log('PASS: HTML5 drag-and-drop PDF')
+
+  for (const title of ['切换元素列表', '切换详情面板']) {
+    await page.getByTitle(title).click()
+    await page.getByTitle(title).click()
+  }
+  await page.getByTitle('切换元素列表').click()
+  await page.getByTitle('切换详情面板').click()
+  assert.equal(await page.locator('.splitter:visible').count(), 0)
+  assert((await page.locator('.main-area').boundingBox()).width > 1000)
+  await page.getByTitle('切换元素列表').click()
+  await page.getByTitle('切换详情面板').click()
+  assert.equal(await page.locator('.splitter:visible').count(), 2)
+  console.log('PASS: independent side panels and grid resizing')
 
   assert.equal(faults.length, 0, faults.join('\n'))
   console.log('ALL BROWSER TESTS PASSED')

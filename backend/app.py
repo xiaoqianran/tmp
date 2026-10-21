@@ -25,6 +25,20 @@ def layout_items(objects):
     ]
 
 
+def detect_tables(page, strategy):
+    """返回表格检测框及抽取内容；单张表格失败不影响其他策略。"""
+    settings = {"vertical_strategy": strategy, "horizontal_strategy": strategy}
+    tables = page.find_tables(table_settings=settings)
+    return [
+        {
+            "bbox": [round(float(v), 2) for v in table.bbox],
+            "text": f"Table {index + 1} · {len(table.rows)} rows",
+            "data": table.extract(),
+        }
+        for index, table in enumerate(tables)
+    ]
+
+
 @app.post("/api/documents")
 async def upload_pdf(file: UploadFile = File(...)):
     if Path(file.filename or "").suffix.lower() != ".pdf":
@@ -75,6 +89,10 @@ def page_layout(document_id: str, number: int):
                 "textboxes": layout_items(
                     page.objects.get("textboxhorizontal", []) + page.objects.get("textboxvertical", [])
                 ),
+                "tables": {
+                    "lines": detect_tables(page, "lines"),
+                    "text": detect_tables(page, "text"),
+                },
             }
     except Exception as exc:
         raise HTTPException(422, f"无法解析页面：{exc}") from exc

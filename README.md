@@ -17,6 +17,16 @@ python -m uvicorn backend.app:app --host 127.0.0.1 --port 8766
 
 开发模式：一个终端启动上面的 uvicorn，另一个终端 `cd frontend && npm run dev`（Vite 代理 /api）。
 
+## 前端架构
+
+- `src/App.vue`：三栏布局、快捷键与共享状态。
+- `src/components/PdfViewer.vue`：PDF.js Canvas、缩放、表格与文字标注框。
+- `src/components/ElementPanel.vue`：左侧策略选择、搜索和元素列表。
+- `src/components/DetailPanel.vue`：右侧选中元素详情与 JSON 导出入口。
+- `src/composables/usePdf.js`：文档状态、翻页请求、旧请求失效处理。
+- `src/api.js`：FastAPI 请求接口。
+- `src/style.css`：既有三栏界面全局样式。
+
 ## 能力
 
 - 拖入本地 PDF 或选择文件，上传到本地 FastAPI（不传外网）。

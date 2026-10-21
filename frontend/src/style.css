@@ -47,4 +47,18 @@
 .copy-detail{margin-top:18px}
 .detail-placeholder{font-size:12px;color:#98a5b7;line-height:1.7;padding-top:10px}
 .panel-toggle{font-size:17px}
+.toolbar .tools-left .toggle-toggle{display:none}
+.toolbar .tools-left{min-width:0;flex:0 1 auto}
+.toolbar .tools-right{flex:none}
+.engine-tabs{display:flex;gap:5px;margin-bottom:13px;background:#eff3f9;padding:4px;border-radius:9px}
+.engine-tabs button{flex:1;border:0;border-radius:7px;padding:9px 5px;background:transparent;color:#63738b;font-size:12px;font-weight:700}
+.engine-tabs button.active{background:white;color:#315bbb;box-shadow:0 1px 5px #21385d16}
+.engine-note{font-size:11px;color:#77869a;line-height:1.7;margin:10px 0}
+.strategy-picker{display:flex;align-items:center;justify-content:space-between;gap:7px;margin:12px 0 18px;font-size:11px;color:#6b7c93}
+.strategy-picker select{min-width:0;max-width:170px;padding:7px;border:1px solid #d4deec;border-radius:7px;background:white;color:#2b456c;font-size:11px}
+.legend-dot.green{background:#18a775}
+.bbox.tables{border:2.5px solid #11aa7a;background:#11aa7a12;z-index:2}
+.element-bar.tables{background:#18a775}
+.detail-chip.tables{background:#e3f8ef;color:#168360}
+.table-data{font:11px/1.5 Consolas,monospace;white-space:pre-wrap;max-height:300px}
 @media(max-width:1160px){.workspace{grid-template-columns:240px 6px minmax(0,1fr) 6px 250px}.toolbar{flex-wrap:wrap;height:auto;min-height:63px;padding:8px;gap:4px}.tools-left,.tools-right{gap:4px}.toggle-toggle{display:none}}
