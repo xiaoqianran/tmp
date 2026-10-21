@@ -8,3 +8,4 @@ onnx>=1.16,<2
 omegaconf>=2.3,<3
 tqdm>=4.66,<5
 requests>=2.31,<3
+colorlog>=6.8,<7
