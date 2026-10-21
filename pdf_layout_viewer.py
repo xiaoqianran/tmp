@@ -56,6 +56,32 @@ def read_layout(page):
     }
 
 
+class PdfView(QGraphicsView):
+    """Ctrl + 滚轮绕鼠标缩放；普通滚轮仍然滚动页面。"""
+    def __init__(self, scene, parent=None):
+        super().__init__(scene, parent)
+        self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
+        self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
+        self.on_zoom = None
+        self.on_pick = None
+
+    def wheelEvent(self, event):
+        if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            factor = 1.15 if event.angleDelta().y() > 0 else 1 / 1.15
+            if self.on_zoom:
+                self.on_zoom(factor)
+            event.accept()
+            return
+        super().wheelEvent(event)
+
+    def mouseDoubleClickEvent(self, event):
+        if self.on_pick and event.button() == Qt.MouseButton.LeftButton:
+            self.on_pick(self.mapToScene(event.position().toPoint()))
+            event.accept()
+            return
+        super().mouseDoubleClickEvent(event)
+
+
 class Viewer(QMainWindow):
     COLORS = {"lines": "#F36565", "textboxes": "#4387F5"}
     TITLES = {"lines": "Text Line", "textboxes": "LTTextBox"}
@@ -71,6 +97,7 @@ class Viewer(QMainWindow):
         self.page_index = 0
         self.entries = []
         self.scale = 2
+        self.current_zoom = 1.0
 
         root = QWidget(objectName="root")
         body = QVBoxLayout(root)
@@ -133,7 +160,9 @@ class Viewer(QMainWindow):
         viewer_layout.setContentsMargins(0, 0, 0, 0)
         viewer_layout.setSpacing(0)
         self.scene = QGraphicsScene()
-        self.view = QGraphicsView(self.scene)
+        self.view = PdfView(self.scene)
+        self.view.on_zoom = self.wheel_zoom
+        self.view.on_pick = self.pick_at
         self.view.setRenderHints(self.view.renderHints())
         self.view.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
         viewer_layout.addWidget(self.view)
@@ -172,6 +201,7 @@ class Viewer(QMainWindow):
         QShortcut(QKeySequence("Ctrl+S"), self, activated=self.export)
         QShortcut(QKeySequence("Alt+Left"), self, activated=lambda: self.turn(-1))
         QShortcut(QKeySequence("Alt+Right"), self, activated=lambda: self.turn(1))
+        QShortcut(QKeySequence("Ctrl+0"), self, activated=lambda: self.zoom.setCurrentIndex(0))
         self.update_buttons()
 
     def open_pdf(self, filename=None):
@@ -237,7 +267,7 @@ class Viewer(QMainWindow):
             self.redraw()
             self.apply_zoom()
             self.update_buttons()
-            self.footer.setText(f"  {Path(self.filename).name}   ·   第 {self.page_index+1} 页   ·   原生字符解析（非 OCR）")
+            self.footer.setText(f"  {Path(self.filename).name}   ·   第 {self.page_index+1} 页   ·   Ctrl+滚轮缩放  ·   双击文字框选中")
         except Exception as exc:
             QMessageBox.warning(self, "页面解析失败", str(exc))
 
@@ -287,8 +317,44 @@ class Viewer(QMainWindow):
         if self.zoom.currentIndex() == 0:
             self.view.fitInView(self.scene.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
         else:
-            factor = [0, .75, 1, 1.25, 1.5, 2][self.zoom.currentIndex()]
+            text = self.zoom.currentText().strip()
+            try:
+                factor = float(text.rstrip("%")) / 100
+            except ValueError:
+                factor = 1.0
             self.view.scale(factor, factor)
+        self.current_zoom = self.view.transform().m11()
+
+    def wheel_zoom(self, factor):
+        if not self.data:
+            return
+        next_zoom = self.current_zoom * factor
+        if not 0.2 <= next_zoom <= 5.0:
+            return
+        self.view.scale(factor, factor)
+        self.current_zoom = next_zoom
+        # 鼠标缩放后显示真实比例，不再错误地标记“适应窗口”。
+        self.zoom.blockSignals(True)
+        self.zoom.setEditable(True)
+        self.zoom.setCurrentText(f"{round(next_zoom * 100)}%")
+        self.zoom.blockSignals(False)
+
+    def pick_at(self, position):
+        """在预览上双击，选择最小的命中文字框。"""
+        if not self.data:
+            return
+        hits = []
+        for index, (source, item, rect) in enumerate(self.entries):
+            if not rect.isVisible() or not rect.rect().contains(position):
+                continue
+            area = rect.rect().width() * rect.rect().height()
+            hits.append((area, index))
+        if hits:
+            index = min(hits)[1]
+            if self.items.item(index).isHidden():
+                self.search.clear()
+            self.items.setCurrentRow(index)
+            self.items.scrollToItem(self.items.item(index))
 
     def export(self):
         if not self.data:
