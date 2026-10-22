@@ -129,3 +129,7 @@
 .bbox.cells{border-color:#009e7e;background:#009e7e12}
 .bbox.intersections{border:1px solid #e85151;background:#e85151;border-radius:50%;z-index:3;transform:translate(-50%,-50%)}
 .geometry-line.tableEdges{stroke:#df5151;stroke-width:1.7}
+/* 左侧整栏滚动：展开图层时，底部内容仍可访问。 */
+.element-panel{overflow-y:auto!important;overscroll-behavior:contain}
+.element-panel .inspector-head{flex:none}
+.element-panel .element-list{flex:none;overflow:visible}
