@@ -16,6 +16,7 @@ export function usePdf(renderPage) {
   const status = ref('本地运行 · Windows CPU · 文件不会上传至互联网')
   let pdfDocument = null
   let requestId = 0
+  const pageCache = new Map()
   function getPdfPage(number) {
     if (!pdfDocument) throw new Error('PDF 尚未打开')
     return pdfDocument.getPage(number)
@@ -30,9 +31,11 @@ export function usePdf(renderPage) {
     error.value = ''
     try {
       const [page, result] = await Promise.all([
-        currentDocument.getPage(number), getPageLayout(documentId.value, number),
+        currentDocument.getPage(number), pageCache.has(number) ? pageCache.get(number) : getPageLayout(documentId.value, number),
       ])
       if (current !== requestId) return
+      pageCache.set(number, result)
+      if (pageCache.size > 6) pageCache.delete(pageCache.keys().next().value)
       layout.value = result
       await renderPage(page, first, () => current !== requestId)
     } catch (err) {
@@ -59,6 +62,7 @@ export function usePdf(renderPage) {
       const oldId = documentId.value
       const oldPdf = pdfDocument
       pdfDocument = nextPdf
+      pageCache.clear()
       documentId.value = nextId
       docName.value = uploaded.filename
       pageCount.value = uploaded.pages
@@ -78,6 +82,7 @@ export function usePdf(renderPage) {
 
   function closePdf() {
     requestId++
+    pageCache.clear()
     const oldId = documentId.value
     const oldPdf = pdfDocument
     pdfDocument = null

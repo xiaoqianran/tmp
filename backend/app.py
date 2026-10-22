@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pdfplumber
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from pydantic import BaseModel, Field
+from time import perf_counter
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -31,9 +33,15 @@ def object_items(objects, kind):
     for item in objects:
         bbox = [round(float(item[key]), 2) for key in ("x0", "top", "x1", "bottom")]
         result = {"bbox": bbox, "text": str(item.get("text") or kind)}
-        result["properties"] = {key: value for key, value in item.items()
-                                if isinstance(value, (str, int, float, bool, type(None)))
-                                and key not in ("stream", "data")}
+        result["properties"] = {
+            key: list(value) if isinstance(value, (list, tuple)) else value
+            for key, value in item.items()
+            if key not in ("stream", "data") and (
+                isinstance(value, (str, int, float, bool, type(None)))
+                or isinstance(value, (list, tuple)) and len(value) <= 32
+                and all(isinstance(v, (str, int, float, bool, type(None))) for v in value)
+            )
+        }
         if kind in ("lines", "edges"):
             result["segment"] = [round(float(item[key]), 2) for key in ("x0", "top", "x1", "bottom")]
             if item.get("orientation") == "v" or item.get("width") == 0:
@@ -93,16 +101,60 @@ def detect_tables(page, strategy, tables=None):
     return results
 
 
-def table_results(page):
+def table_results(page, custom=None):
     """每种策略只运行一次 TableFinder，同时输出表格与调试结果。"""
     tables = {}
     debugging = {}
     for strategy in ("lines", "text"):
         settings = {"vertical_strategy": strategy, "horizontal_strategy": strategy}
+        if custom:
+            settings.update(custom)
         finder = page.debug_tablefinder(table_settings=settings)
         tables[strategy] = detect_tables(page, strategy, finder.tables)
         debugging[strategy] = debug_tables(finder)
     return tables, debugging
+
+
+class InspectOptions(BaseModel):
+    bbox: list[float] | None = None
+    search: str = Field("", max_length=100)
+    snap_tolerance: float = Field(3, ge=0, le=30)
+    join_tolerance: float = Field(3, ge=0, le=30)
+    intersection_tolerance: float = Field(3, ge=0, le=30)
+    edge_min_length: float = Field(3, ge=0, le=30)
+
+
+@app.post("/api/documents/{document_id}/pages/{number}/inspect")
+def inspect_page(document_id: str, number: int, options: InspectOptions):
+    record = documents.get(document_id)
+    if not record or not 1 <= number <= record[1]:
+        raise HTTPException(404, "PDF 或页码不存在")
+    settings = options.model_dump(exclude={"bbox", "search"})
+    start = perf_counter()
+    try:
+        with pdfplumber.open(record[0], laparams={}) as pdf:
+            page = pdf.pages[number - 1]
+            if options.bbox:
+                x0, top, x1, bottom = options.bbox
+                if not (0 <= x0 < x1 <= page.width and 0 <= top < bottom <= page.height):
+                    raise HTTPException(400, "框选区域超出页面")
+                page = page.crop((x0, top, x1, bottom))
+            tables, debugging = table_results(page, settings)
+            return {
+                "tables": tables, "table_debug": debugging,
+                "matches": object_items(page.search(options.search, regex=False), "matches") if options.search.strip() else [],
+                "text": {
+                    "normal": page.extract_text() or "",
+                    "layout": page.extract_text(layout=True) or "",
+                    "deduped": page.dedupe_chars().extract_text() or "",
+                },
+                "elapsed_ms": round((perf_counter() - start) * 1000, 1),
+                "bbox": options.bbox,
+            }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(422, f"局部或参数解析失败：{exc}") from exc
 
 
 @app.get("/api/documents/{document_id}/pages/{number}/doclayout")
@@ -211,6 +263,8 @@ def page_layout(document_id: str, number: int):
                     "edges": object_items(page.edges, "edges"),
                 },
                 "images": object_items(page.images, "images"),
+                "hyperlinks": object_items(page.hyperlinks, "hyperlinks"),
+                "annotations": object_items(page.annots or [], "annotations"),
                 "table_debug": debugging,
                 "tables": tables,
             }

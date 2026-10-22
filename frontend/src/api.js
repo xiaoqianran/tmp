@@ -15,6 +15,12 @@ export async function getPageLayout(id, number) {
   return readResponse(await fetch('/api/documents/' + id + '/pages/' + number))
 }
 
+export async function inspectPage(id, number, options) {
+  return readResponse(await fetch('/api/documents/' + id + '/pages/' + number + '/inspect', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(options),
+  }))
+}
+
 export async function getCamelotTables(id, number, strategy) {
   return readResponse(await fetch('/api/documents/' + id + '/pages/' + number + '/camelot/' + strategy))
 }

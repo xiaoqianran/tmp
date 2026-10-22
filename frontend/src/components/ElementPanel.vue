@@ -1,14 +1,16 @@
 <script setup>
-defineProps(['layout', 'items', 'selected', 'activeTab', 'tableStrategy', 'showLines', 'showBoxes', 'showTables', 'extraLayers', 'search', 'camelotCount', 'camelotBusy', 'camelotError', 'doclayoutCount', 'doclayoutBusy', 'doclayoutError', 'doclayoutThreshold'])
-const emit = defineEmits(['update:activeTab', 'update:tableStrategy', 'update:showLines', 'update:showBoxes', 'update:showTables', 'update:extraLayers', 'update:search', 'update:doclayoutThreshold', 'select'])
+defineProps(['layout', 'items', 'selected', 'activeTab', 'tableStrategy', 'showLines', 'showBoxes', 'showTables', 'extraLayers', 'search', 'camelotCount', 'camelotBusy', 'camelotError', 'doclayoutCount', 'doclayoutBusy', 'doclayoutError', 'doclayoutThreshold', 'inspectSettings', 'inspectResult', 'inspectBusy', 'inspectError', 'cropBox', 'searchTerm', 'soloType'])
+const emit = defineEmits(['update:activeTab', 'update:tableStrategy', 'update:showLines', 'update:showBoxes', 'update:showTables', 'update:extraLayers', 'update:search', 'update:doclayoutThreshold', 'update:inspectSettings', 'resetInspect', 'searchInspect', 'soloLayer', 'select'])
+const parameters = { snap_tolerance: '吸附 Snap', join_tolerance: '连接 Join', intersection_tolerance: '交点 Intersection', edge_min_length: '最短边 Edge' }
 const groups = [
-  { title: '文字与布局', layers: { words: 'Words · 单词', chars: 'Chars · 字符' } },
+  { title: '文字与布局', layers: { words: 'Words · 单词', chars: 'Chars · 字符', matches: '搜索命中' } },
   { title: '绘图与图像', layers: { strokes: 'Lines · 直线', rects: 'Rects · 矩形', curves: 'Curves · 曲线', edges: 'Edges · 边缘', images: 'Images · 图像' } },
   { title: '表格调试', layers: { tableEdges: '候选 Edges', intersections: 'Intersections · 交点', cells: 'Cells · 单元格' } },
+  { title: '文档结构', layers: { hyperlinks: 'Hyperlinks · 链接', annotations: 'Annotations · 注释' } },
 ]
 function count(layout, type, strategy) {
   if (!layout) return 0
-  if (['words', 'chars', 'images'].includes(type)) return layout[type]?.length ?? 0
+  if (['words', 'chars', 'images', 'matches', 'hyperlinks', 'annotations'].includes(type)) return layout[type]?.length ?? 0
   if (['tableEdges', 'intersections', 'cells'].includes(type)) return layout.table_debug?.[strategy]?.[type === 'tableEdges' ? 'edges' : type]?.length ?? 0
   return layout.strokes?.[type === 'strokes' ? 'lines' : type]?.length ?? 0
 }
@@ -42,11 +44,31 @@ function toggleLayer(layers, type, checked) {
           <div class="layer-options">
             <label v-for="(name, type) in group.layers" :key="type">
               <input type="checkbox" :checked="extraLayers[type]" @change="toggleLayer(extraLayers, type, $event.target.checked)">
-              <span>{{ name }}</span><small>{{ count(layout, type, tableStrategy) }}</small>
+              <span>{{ name }}</span><small>{{ count(layout, type, tableStrategy) }}</small><button class="solo-layer" :title="'只显示 ' + name" @click.stop.prevent="emit('soloLayer', type)">{{ soloType === type ? '恢复' : '独看' }}</button>
             </label>
           </div>
         </section>
       </div>
+      <section v-if="activeTab === 'pdfplumber'" class="inspect-controls">
+        <div class="layer-heading">原文搜索（回车定位）</div>
+        <form class="search-wrap" @submit.prevent="emit('searchInspect', $event.target.elements.query.value.trim())">
+          <input name="query" type="text" :value="searchTerm" placeholder="查找 PDF 文字" maxlength="100">
+          <button type="submit" class="solo-layer">查找</button>
+        </form>
+        <div class="layer-heading">表格检测参数 <button @click="emit('resetInspect')">恢复默认</button></div>
+        <label v-for="(name, key) in parameters" :key="key" class="inspect-setting">
+          <span>{{ name }}</span>
+          <input type="number" min="0" max="30" step="0.5" :value="inspectSettings[key]" @change="emit('update:inspectSettings', { ...inspectSettings, [key]: Math.max(0, Math.min(30, Number($event.target.value) || 0)) })">
+        </label>
+        <p class="inspect-status">{{ inspectBusy ? '正在重新计算…' : inspectError || (inspectResult ? '解析耗时 ' + inspectResult.elapsed_ms + ' ms' : '使用默认检测结果') }}</p>
+        <p v-if="cropBox" class="inspect-status">局部区域：{{ cropBox.map(v => v.toFixed(1)).join(', ') }}</p>
+        <div v-if="inspectResult" class="inspect-text">
+          <div class="layer-heading">文字提取对比</div>
+          <details><summary>普通 extract_text()</summary><pre>{{ inspectResult.text.normal }}</pre></details>
+          <details><summary>布局 extract_text(layout=True)</summary><pre>{{ inspectResult.text.layout }}</pre></details>
+          <details><summary>去重 dedupe_chars()</summary><pre>{{ inspectResult.text.deduped }}</pre></details>
+        </div>
+      </section>
     </div>
     <div class="element-list">
       <template v-if="items.length">

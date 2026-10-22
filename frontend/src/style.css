@@ -142,3 +142,20 @@
 .layer-options{display:flex;flex-wrap:wrap;column-gap:12px;row-gap:7px}
 .layer-options label{flex:0 0 auto;white-space:nowrap}
 .layer-options label span{flex:none}
+.inspect-controls{margin-top:12px;display:grid;gap:6px}
+.inspect-controls .layer-heading{display:flex;justify-content:space-between;align-items:center}
+.inspect-controls .layer-heading button{border:0;background:none;color:#4b74af;font-size:10px}
+.inspect-setting{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:11px;color:#52647e}
+.inspect-setting input{width:68px;min-width:0;border:1px solid #dae3ef;border-radius:5px;padding:4px;font-size:11px}
+.inspect-status{font-size:10px;color:#8a97a9;margin:4px 0!important;overflow-wrap:anywhere}
+.inspect-text{display:grid;gap:5px;min-width:0}
+.inspect-text details{font-size:11px;color:#52647e}
+.inspect-text pre{max-height:180px;overflow:auto;white-space:pre-wrap;font-size:10px}
+.crop-picker{position:absolute;inset:0;pointer-events:auto;cursor:crosshair;touch-action:none;z-index:20}
+.crop-highlight{position:absolute;pointer-events:none;border:2px dashed #00a68a;background:#00a68a18;z-index:19}
+.button.active{border-color:#00a68a;color:#007f69}
+.solo-layer{border:0;background:transparent;color:#4877a6;font-size:10px;cursor:pointer;white-space:nowrap;padding:1px 2px}
+.solo-layer:hover{color:#0a987d}
+.bbox.matches{border:2px solid #e1a325;background:#ffd34035;z-index:6}
+.bbox.hyperlinks{border:1px dashed #477cf5;background:#477cf512}
+.bbox.annotations{border:1px dashed #c16e32;background:#c16e3212}

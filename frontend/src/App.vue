@@ -5,7 +5,7 @@ import PdfViewer from './components/PdfViewer.vue'
 import ElementPanel from './components/ElementPanel.vue'
 import DetailPanel from './components/DetailPanel.vue'
 import ThumbnailSidebar from './components/ThumbnailSidebar.vue'
-import { getCamelotTables, getDocLayoutTables } from './api'
+import { getCamelotTables, getDocLayoutTables, inspectPage } from './api'
 
 const input = ref(null)
 const pdfViewer = ref(null)
@@ -14,10 +14,54 @@ const { docName, documentId, pageCount, pageNum, layout, busy, error, status, op
 const showLines = ref(true)
 const showBoxes = ref(true)
 const showTables = ref(true)
-const extraLayers = ref({ words: false, chars: false, strokes: false, rects: false, curves: false, edges: false, images: false, intersections: false, cells: false, tableEdges: false })
-const extraTypes = ['words', 'chars', 'strokes', 'rects', 'curves', 'edges', 'images']
+const extraLayers = ref({ words: false, chars: false, strokes: false, rects: false, curves: false, edges: false, images: false, intersections: false, cells: false, tableEdges: false, matches: true, hyperlinks: false, annotations: false })
+const extraTypes = ['words', 'chars', 'strokes', 'rects', 'curves', 'edges', 'images', 'hyperlinks', 'annotations']
+const searchTerm = ref('')
+const soloType = ref('')
+let savedLayers = null
+function isolateLayer(type) {
+  if (soloType.value === type) {
+    showLines.value = savedLayers.lines; showBoxes.value = savedLayers.boxes; showTables.value = savedLayers.tables
+    extraLayers.value = savedLayers.extra
+    soloType.value = ''; savedLayers = null
+    return
+  }
+  if (!savedLayers) savedLayers = { lines: showLines.value, boxes: showBoxes.value, tables: showTables.value, extra: { ...extraLayers.value } }
+  soloType.value = type
+  showLines.value = type === 'lines'; showBoxes.value = type === 'textboxes'; showTables.value = type === 'tables'
+  extraLayers.value = Object.fromEntries(Object.keys(extraLayers.value).map(key => [key, key === type]))
+}
 const activeTab = ref('pdfplumber')
 const tableStrategy = ref('text')
+const inspectDefaults = { snap_tolerance: 3, join_tolerance: 3, intersection_tolerance: 3, edge_min_length: 3 }
+const inspectSettings = ref({ ...inspectDefaults })
+const cropMode = ref(false)
+const cropBox = ref(null)
+const inspectResult = ref(null)
+const inspectBusy = ref(false)
+const inspectError = ref('')
+const inspectCache = new Map()
+let inspectRequest = 0
+watch([documentId, pageNum], () => { cropBox.value = null; inspectResult.value = null; cropMode.value = false; searchTerm.value = ''; inspectCache.clear() })
+watch([documentId, pageNum, inspectSettings, cropBox, searchTerm, activeTab], async () => {
+  const request = ++inspectRequest
+  inspectResult.value = null
+  inspectError.value = ''
+  inspectBusy.value = false
+  if (!documentId.value || !pageNum.value || activeTab.value !== 'pdfplumber') return
+  const key = JSON.stringify([documentId.value, pageNum.value, inspectSettings.value, cropBox.value, searchTerm.value])
+  if (inspectCache.has(key)) { inspectResult.value = inspectCache.get(key); return }
+  inspectBusy.value = true
+  try {
+    const result = await inspectPage(documentId.value, pageNum.value, { ...inspectSettings.value, bbox: cropBox.value, search: searchTerm.value })
+    if (request !== inspectRequest) return
+    inspectCache.set(key, result)
+    if (inspectCache.size > 12) inspectCache.delete(inspectCache.keys().next().value)
+    inspectResult.value = result
+  } catch (err) { if (request === inspectRequest) inspectError.value = err.message || String(err) }
+  finally { if (request === inspectRequest) inspectBusy.value = false }
+}, { deep: true })
+const inspectedLayout = computed(() => layout.value && inspectResult.value ? { ...layout.value, tables: inspectResult.value.tables, table_debug: inspectResult.value.table_debug, matches: inspectResult.value.matches } : layout.value)
 const camelotStrategy = ref('stream')
 const camelotResults = ref({})
 const camelotBusy = ref(false)
@@ -101,9 +145,10 @@ const workspaceStyle = computed(() => ({
 const allItems = computed(() => layout.value ? [
   ...layout.value.lines.map((entry, index) => ({ ...entry, type: 'lines', id: 'line-' + index })),
   ...layout.value.textboxes.map((entry, index) => ({ ...entry, type: 'textboxes', id: 'box-' + index })),
-  ...extraTypes.flatMap(type => (['words', 'chars', 'images'].includes(type) ? (layout.value[type] || []) : (layout.value.strokes?.[type === 'strokes' ? 'lines' : type] || [])).map((entry, index) => ({ ...entry, type, id: type + '-' + index }))),
-  ...['intersections', 'cells', 'tableEdges'].flatMap(type => (layout.value.table_debug?.[tableStrategy.value]?.[type === 'tableEdges' ? 'edges' : type] || []).map((entry, index) => ({ ...entry, type, id: type + '-' + index }))),
-  ...(activeTab.value === 'doclayout' ? doclayoutTables.value : activeTab.value === 'camelot' ? camelotTables.value : layout.value.tables?.[tableStrategy.value] || []).map((entry, index) => ({
+  ...extraTypes.flatMap(type => (['words', 'chars', 'images', 'hyperlinks', 'annotations'].includes(type) ? (layout.value[type] || []) : (layout.value.strokes?.[type === 'strokes' ? 'lines' : type] || [])).map((entry, index) => ({ ...entry, type, id: type + '-' + index }))),
+  ...['intersections', 'cells', 'tableEdges'].flatMap(type => (inspectedLayout.value.table_debug?.[tableStrategy.value]?.[type === 'tableEdges' ? 'edges' : type] || []).map((entry, index) => ({ ...entry, type, id: type + '-' + index }))),
+  ...(inspectedLayout.value.matches || []).map((entry, index) => ({ ...entry, type: 'matches', id: 'match-' + index })),
+  ...(activeTab.value === 'doclayout' ? doclayoutTables.value : activeTab.value === 'camelot' ? camelotTables.value : inspectedLayout.value.tables?.[tableStrategy.value] || []).map((entry, index) => ({
     ...entry, type: 'tables', id: 'table-' + currentStrategy.value + '-' + index,
   })),
 ] : [])
@@ -117,6 +162,11 @@ const visibleItems = computed(() => allItems.value.filter(item =>
 const filteredItems = computed(() => visibleItems.value.filter(item =>
   item.text.toLowerCase().includes(search.value.trim().toLowerCase())))
 const selectedItem = computed(() => visibleItems.value.find(item => item.id === selected.value))
+const overlayItems = computed(() => {
+  const first = visibleItems.value.slice(0, 3000)
+  if (selectedItem.value && !first.includes(selectedItem.value)) first.push(selectedItem.value)
+  return first
+})
 const zoomText = computed(() => pdfViewer.value?.zoomText || '100%')
 watch([layout, tableStrategy, camelotStrategy, activeTab], () => { selected.value = '' })
 
@@ -157,7 +207,7 @@ async function copySelectedText() {
 }
 function downloadJson() {
   if (!layout.value) return
-  const blob = new Blob([JSON.stringify({ ...layout.value, ...(activeTab.value === 'camelot' ? { camelot: { strategy: camelotStrategy.value, tables: camelotTables.value } } : {}), ...(activeTab.value === 'doclayout' ? { doclayout: { model: 'PP-DocLayout-M ONNX', threshold: doclayoutThreshold.value, tables: doclayoutTables.value } } : {}) }, null, 2)], { type: 'application/json' })
+  const blob = new Blob([JSON.stringify({ ...inspectedLayout.value, ...(inspectResult.value ? { inspection: { settings: inspectSettings.value, bbox: cropBox.value, elapsed_ms: inspectResult.value.elapsed_ms, text: inspectResult.value.text } } : {}), ...(activeTab.value === 'camelot' ? { camelot: { strategy: camelotStrategy.value, tables: camelotTables.value } } : {}), ...(activeTab.value === 'doclayout' ? { doclayout: { model: 'PP-DocLayout-M ONNX', threshold: doclayoutThreshold.value, tables: doclayoutTables.value } } : {}) }, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
@@ -240,7 +290,10 @@ onUnmounted(() => {
     </header>
 
     <div class="workspace" :style="workspaceStyle">
-      <ElementPanel v-show="leftOpen" :layout="layout" :items="filteredItems" :selected="selected"
+      <ElementPanel v-show="leftOpen" :layout="inspectedLayout" :items="filteredItems" :selected="selected"
+        :inspectSettings="inspectSettings" :inspectResult="inspectResult" :inspectBusy="inspectBusy" :inspectError="inspectError" :cropBox="cropBox"
+        :searchTerm="searchTerm" :soloType="soloType" @searchInspect="searchTerm = $event" @soloLayer="isolateLayer"
+        @update:inspectSettings="inspectSettings = $event" @resetInspect="inspectSettings = { ...inspectDefaults }; cropBox = null"
         v-model:activeTab="activeTab" v-model:tableStrategy="currentStrategy"
         v-model:showLines="showLines" v-model:showBoxes="showBoxes" v-model:showTables="showTables"
         v-model:search="search" v-model:extraLayers="extraLayers" :camelotCount="camelotTables.length" :camelotBusy="camelotBusy" :camelotError="camelotError"
@@ -250,6 +303,8 @@ onUnmounted(() => {
       <section class="main-area">
         <nav class="toolbar">
           <div class="tools-left">
+            <button v-if="activeTab === 'pdfplumber'" class="button subtle" :class="{ active: cropMode }" :disabled="!layout" @click="cropMode = !cropMode">{{ cropMode ? '取消框选' : '框选解析' }}</button>
+            <button v-if="activeTab === 'pdfplumber' && cropBox" class="button subtle" @click="cropBox = null">清除区域</button>
             <button class="icon-button panel-toggle" title="切换元素列表" @click="leftOpen = !leftOpen">☷</button>
             <button class="icon-button panel-toggle thumbnail-toggle" title="切换页面预览" :aria-pressed="thumbnailsOpen" @click="thumbnailsOpen = !thumbnailsOpen">▤</button>
             <div class="page-controls">
@@ -275,8 +330,8 @@ onUnmounted(() => {
         <div class="pdf-reading-space">
           <ThumbnailSidebar v-if="thumbnailsOpen" :documentId="documentId" :pageCount="pageCount"
             :pageNum="pageNum" :getPage="getPdfPage" @navigate="loadPage" />
-          <PdfViewer ref="pdfViewer" :layout="layout" :items="visibleItems" :selected="selected"
-            :status="status" @select="choose" @open="input?.click()" />
+          <PdfViewer ref="pdfViewer" :layout="layout" :items="overlayItems" :selected="selected" :cropMode="cropMode" :cropBox="cropBox"
+            :status="status" @select="choose" @open="input?.click()" @crop="cropBox = $event; cropMode = false" />
         </div>
         <div class="viewer-footer"><span><span class="footer-dot"></span>{{ status }}</span><span class="shortcuts">Ctrl + 滚轮缩放 <i>·</i> A/D / ← → 翻页 <i>·</i> W/S / ↑ ↓ 竖向滚动</span></div>
       </section>

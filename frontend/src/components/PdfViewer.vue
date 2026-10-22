@@ -1,7 +1,39 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
-const props = defineProps(['layout', 'items', 'selected', 'status'])
-const emit = defineEmits(['select', 'open'])
+const props = defineProps(['layout', 'items', 'selected', 'status', 'cropMode', 'cropBox'])
+const emit = defineEmits(['select', 'open', 'crop'])
+const selecting = ref(null)
+const cropPreview = computed(() => selecting.value ? selecting.value.bbox : props.cropBox)
+function position(event) {
+  const rect = event.currentTarget.getBoundingClientRect()
+  return [Math.max(0, Math.min(props.layout.size[0], (event.clientX - rect.left) / rect.width * props.layout.size[0])),
+    Math.max(0, Math.min(props.layout.size[1], (event.clientY - rect.top) / rect.height * props.layout.size[1]))]
+}
+function cropStart(event) {
+  if (!props.cropMode || event.button !== 0) return
+  const [x, y] = position(event)
+  selecting.value = { start: [x, y], bbox: [x, y, x, y] }
+  event.currentTarget.setPointerCapture(event.pointerId)
+}
+function cropMove(event) {
+  if (!selecting.value) return
+  const [x, y] = position(event)
+  const [startX, startY] = selecting.value.start
+  selecting.value.bbox = [Math.min(x, startX), Math.min(y, startY), Math.max(x, startX), Math.max(y, startY)]
+}
+function cropEnd(event) {
+  if (!selecting.value) return
+  cropMove(event)
+  const box = selecting.value.bbox
+  selecting.value = null
+  if (box[2] - box[0] > 8 && box[3] - box[1] > 8) emit('crop', box)
+}
+const cropStyle = computed(() => {
+  if (!cropPreview.value || !props.layout) return {}
+  const [x0, y0, x1, y1] = cropPreview.value
+  const [w, h] = props.layout.size
+  return { left: x0 / w * 100 + '%', top: y0 / h * 100 + '%', width: (x1 - x0) / w * 100 + '%', height: (y1 - y0) / h * 100 + '%' }
+})
 const viewer = ref(null)
 const canvas = ref(null)
 const zoom = ref(1)
@@ -127,6 +159,8 @@ defineExpose({ renderPage, fitPage, setZoom, centerOn, scrollVertical, zoomText 
           <button v-for="item in boxes" :key="item.id" class="bbox" :class="[item.type, { selected: selected === item.id }]"
             :style="boxStyle(item)" :aria-label="item.text" :title="item.text" @click="emit('select', item)"></button>
           <button v-for="item in segments" :key="item.id" class="geometry-hit" :style="boxStyle(item)" :aria-label="item.type" :title="item.type" @click="emit('select', item)"></button>
+          <div v-if="cropPreview" class="crop-highlight" :style="cropStyle"></div>
+          <div v-if="cropMode" class="crop-picker" @pointerdown="cropStart" @pointermove="cropMove" @pointerup="cropEnd" @pointercancel="selecting = null"></div>
         </div>
       </div>
     </div>
