@@ -87,7 +87,7 @@ try {
   console.log('PASS: A/D and arrow keys navigate pages')
 
   await page.waitForFunction(() => !document.querySelector('.loading'))
-  await page.locator('.search-wrap input').fill('Analyte')
+  await page.locator('.search-wrap input[aria-label="搜索文字内容"]').fill('Analyte')
   assert((await page.locator('.element-item').count()) > 0)
   await page.locator('.element-item').first().click()
   assert.match(await page.locator('.detail-content').innerText(), /Analyte/)
@@ -99,7 +99,7 @@ try {
   assert(download.suggestedFilename().endsWith('.json'))
   console.log('PASS: export JSON')
 
-  await page.locator('.search-wrap input').fill('')
+  await page.locator('.search-wrap input[aria-label="搜索文字内容"]').fill('')
   const payload = readFileSync(pdf).toString('base64')
   await page.evaluate(({ payload }) => {
     const binary = atob(payload)
@@ -130,10 +130,10 @@ try {
   console.log('PASS: independent side panels and grid resizing')
 
   await page.getByRole('button', { name: 'Camelot', exact: true }).click()
-  await page.locator('.search-wrap input').fill('definitely-not-a-table')
+  await page.locator('.search-wrap input[aria-label="搜索文字内容"]').fill('definitely-not-a-table')
   await page.getByRole('button', { name: 'pdfplumber', exact: true }).click()
   await page.getByRole('button', { name: 'Camelot', exact: true }).click()
-  assert.equal(await page.locator('.search-wrap input').inputValue(), '')
+  assert.equal(await page.locator('.search-wrap input[aria-label="搜索文字内容"]').inputValue(), '')
   assert.equal(await page.locator('.filter-counts label').count(), 1)
   for (const strategy of ['stream', 'network', 'lattice', 'hybrid']) {
     await page.locator('#camelot-strategy').selectOption(strategy)
