@@ -25,6 +25,22 @@ def layout_items(objects):
     ]
 
 
+def object_items(objects, kind):
+    """提取原生对象的文字、范围与绘制端点。"""
+    results = []
+    for item in objects:
+        bbox = [round(float(item[key]), 2) for key in ("x0", "top", "x1", "bottom")]
+        result = {"bbox": bbox, "text": str(item.get("text") or kind)}
+        if kind in ("lines", "edges"):
+            result["segment"] = [round(float(item[key]), 2) for key in ("x0", "top", "x1", "bottom")]
+            if item.get("orientation") == "v" or item.get("width") == 0:
+                result["segment"] = [bbox[0], bbox[1], bbox[0], bbox[3]]
+            elif item.get("orientation") == "h" or item.get("height") == 0:
+                result["segment"] = [bbox[0], bbox[1], bbox[2], bbox[1]]
+        results.append(result)
+    return results
+
+
 def detect_tables(page, strategy):
     """返回表格检测框及抽取内容；单张表格失败不影响其他策略。"""
     settings = {"vertical_strategy": strategy, "horizontal_strategy": strategy}
@@ -155,6 +171,14 @@ def page_layout(document_id: str, number: int):
                 "textboxes": layout_items(
                     page.objects.get("textboxhorizontal", []) + page.objects.get("textboxvertical", [])
                 ),
+                "words": object_items(page.extract_words(), "words"),
+                "chars": object_items(page.chars, "chars"),
+                "strokes": {
+                    "lines": object_items(page.lines, "lines"),
+                    "rects": object_items(page.rects, "rects"),
+                    "curves": object_items(page.curves, "curves"),
+                    "edges": object_items(page.edges, "edges"),
+                },
                 "tables": {
                     "lines": detect_tables(page, "lines"),
                     "text": detect_tables(page, "text"),

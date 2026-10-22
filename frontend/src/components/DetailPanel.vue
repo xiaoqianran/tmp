@@ -57,7 +57,7 @@ async function copyTable() {
       <button class="export-link" :disabled="!layout" @click="emit('export')">导出 JSON ↗</button>
     </div>
     <div v-if="item" class="detail-body">
-      <div class="detail-chip" :class="item.type">{{ item.type === 'lines' ? 'Text Line' : item.type === 'tables' ? 'Table · ' + tableStrategy : 'LTTextBox' }}</div>
+      <div class="detail-chip" :class="item.type">{{ item.type === 'lines' ? 'Text Line' : item.type === 'tables' ? 'Table · ' + tableStrategy : item.type === 'textboxes' ? 'LTTextBox' : item.type.toUpperCase() }}</div>
       <template v-if="item.score !== undefined"><div class="section-label">表格定位置信度</div><div class="detail-content">{{ (item.score * 100).toFixed(1) }}%</div></template>
       <div class="section-label">{{ item.score !== undefined ? '检测结果' : '完整文字' }}</div>
       <div class="detail-content">{{ item.text }}</div>

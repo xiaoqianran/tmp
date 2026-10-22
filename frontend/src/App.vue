@@ -14,6 +14,8 @@ const { docName, documentId, pageCount, pageNum, layout, busy, error, status, op
 const showLines = ref(true)
 const showBoxes = ref(true)
 const showTables = ref(true)
+const extraLayers = ref({ words: false, chars: false, strokes: false, rects: false, curves: false, edges: false })
+const extraTypes = ['words', 'chars', 'strokes', 'rects', 'curves', 'edges']
 const activeTab = ref('pdfplumber')
 const tableStrategy = ref('text')
 const camelotStrategy = ref('stream')
@@ -99,6 +101,7 @@ const workspaceStyle = computed(() => ({
 const allItems = computed(() => layout.value ? [
   ...layout.value.lines.map((entry, index) => ({ ...entry, type: 'lines', id: 'line-' + index })),
   ...layout.value.textboxes.map((entry, index) => ({ ...entry, type: 'textboxes', id: 'box-' + index })),
+  ...extraTypes.flatMap(type => (type === 'words' || type === 'chars' ? (layout.value[type] || []) : (layout.value.strokes?.[type === 'strokes' ? 'lines' : type] || [])).map((entry, index) => ({ ...entry, type, id: type + '-' + index }))),
   ...(activeTab.value === 'doclayout' ? doclayoutTables.value : activeTab.value === 'camelot' ? camelotTables.value : layout.value.tables?.[tableStrategy.value] || []).map((entry, index) => ({
     ...entry, type: 'tables', id: 'table-' + currentStrategy.value + '-' + index,
   })),
@@ -107,6 +110,7 @@ const visibleItems = computed(() => allItems.value.filter(item =>
   activeTab.value !== 'pdfplumber' ? item.type === 'tables' && showTables.value :
   (item.type === 'lines' && showLines.value) ||
   (item.type === 'textboxes' && showBoxes.value) ||
+  (extraLayers.value[item.type] === true) ||
   (item.type === 'tables' && showTables.value)
 ))
 const filteredItems = computed(() => visibleItems.value.filter(item =>
@@ -238,7 +242,7 @@ onUnmounted(() => {
       <ElementPanel v-show="leftOpen" :layout="layout" :items="filteredItems" :selected="selected"
         v-model:activeTab="activeTab" v-model:tableStrategy="currentStrategy"
         v-model:showLines="showLines" v-model:showBoxes="showBoxes" v-model:showTables="showTables"
-        v-model:search="search" :camelotCount="camelotTables.length" :camelotBusy="camelotBusy" :camelotError="camelotError"
+        v-model:search="search" v-model:extraLayers="extraLayers" :camelotCount="camelotTables.length" :camelotBusy="camelotBusy" :camelotError="camelotError"
         :doclayoutCount="doclayoutTables.length" :doclayoutBusy="doclayoutBusy" :doclayoutError="doclayoutError"
         v-model:doclayoutThreshold="doclayoutThreshold" @select="choose($event, true)" />
       <div v-if="leftOpen" class="splitter" role="separator" aria-label="调整左侧宽度" @pointerdown="startResize('left', $event)"></div>

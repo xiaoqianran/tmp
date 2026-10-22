@@ -14,6 +14,8 @@ let renderVersion = 0
 const PDF_SCALE = 1.5
 const zoomText = computed(() => Math.round(zoom.value * 100) + '%')
 const pageStyle = computed(() => ({ width: pageWidth.value * zoom.value + 'px', height: pageHeight.value * zoom.value + 'px' }))
+const segments = computed(() => props.items.filter(item => item.segment))
+const boxes = computed(() => props.items.filter(item => !item.segment))
 
 async function renderPage(page, first = false, stale = () => false) {
   const version = ++renderVersion
@@ -80,8 +82,8 @@ function boxStyle(item) {
   const [x0, y0, x1, y1] = item.bbox
   return {
     left: x0 / w * 100 + '%', top: y0 / h * 100 + '%',
-    width: Math.max(0, (x1 - x0) / w * 100) + '%',
-    height: Math.max(0, (y1 - y0) / h * 100) + '%',
+    width: Math.max(0.15, (x1 - x0) / w * 100) + '%',
+    height: Math.max(0.15, (y1 - y0) / h * 100) + '%',
   }
 }
 function centerOn(item) {
@@ -119,8 +121,12 @@ defineExpose({ renderPage, fitPage, setZoom, centerOn, scrollVertical, zoomText 
       <div class="paper" :style="pageStyle">
         <canvas ref="canvas" class="pdf-canvas"></canvas>
         <div class="overlay">
-          <button v-for="item in items" :key="item.id" class="bbox" :class="[item.type, { selected: selected === item.id }]"
+          <svg v-if="segments.length" class="geometry-overlay" :viewBox="'0 0 ' + layout.size[0] + ' ' + layout.size[1]" preserveAspectRatio="none">
+            <line v-for="item in segments" :key="item.id" :x1="item.segment[0]" :y1="item.segment[1]" :x2="item.segment[2]" :y2="item.segment[3]" :class="['geometry-line', item.type, { selected: selected === item.id }]" />
+          </svg>
+          <button v-for="item in boxes" :key="item.id" class="bbox" :class="[item.type, { selected: selected === item.id }]"
             :style="boxStyle(item)" :aria-label="item.text" :title="item.text" @click="emit('select', item)"></button>
+          <button v-for="item in segments" :key="item.id" class="geometry-hit" :style="boxStyle(item)" :aria-label="item.type" :title="item.type" @click="emit('select', item)"></button>
         </div>
       </div>
     </div>

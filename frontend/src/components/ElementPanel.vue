@@ -1,6 +1,10 @@
 <script setup>
-defineProps(['layout', 'items', 'selected', 'activeTab', 'tableStrategy', 'showLines', 'showBoxes', 'showTables', 'search', 'camelotCount', 'camelotBusy', 'camelotError', 'doclayoutCount', 'doclayoutBusy', 'doclayoutError', 'doclayoutThreshold'])
-const emit = defineEmits(['update:activeTab', 'update:tableStrategy', 'update:showLines', 'update:showBoxes', 'update:showTables', 'update:search', 'update:doclayoutThreshold', 'select'])
+defineProps(['layout', 'items', 'selected', 'activeTab', 'tableStrategy', 'showLines', 'showBoxes', 'showTables', 'extraLayers', 'search', 'camelotCount', 'camelotBusy', 'camelotError', 'doclayoutCount', 'doclayoutBusy', 'doclayoutError', 'doclayoutThreshold'])
+const emit = defineEmits(['update:activeTab', 'update:tableStrategy', 'update:showLines', 'update:showBoxes', 'update:showTables', 'update:extraLayers', 'update:search', 'update:doclayoutThreshold', 'select'])
+const layerNames = { words: 'Words · 单词', chars: 'Chars · 字符', strokes: 'Lines · 直线', rects: 'Rects · 矩形', curves: 'Curves · 曲线', edges: 'Edges · 边缘' }
+function toggleLayer(layers, type, checked) {
+  emit('update:extraLayers', { ...layers, [type]: checked })
+}
 </script>
 
 <template>
@@ -22,12 +26,18 @@ const emit = defineEmits(['update:activeTab', 'update:tableStrategy', 'update:sh
         <label v-if="activeTab === 'pdfplumber'"><input type="checkbox" :checked="showBoxes" @change="emit('update:showBoxes', $event.target.checked)"> <span class="legend-dot blue"></span> Boxes {{ layout?.textboxes.length ?? 0 }}</label>
         <label><input type="checkbox" :checked="showTables" @change="emit('update:showTables', $event.target.checked)"> <span class="legend-dot green"></span> Tables {{ activeTab === 'doclayout' ? doclayoutCount : activeTab === 'camelot' ? camelotCount : (layout?.tables?.[tableStrategy]?.length ?? 0) }}</label>
       </div>
+      <div v-if="activeTab === 'pdfplumber'" class="filter-counts" style="flex-wrap:wrap">
+        <label v-for="(name, type) in layerNames" :key="type">
+          <input type="checkbox" :checked="extraLayers[type]" @change="toggleLayer(extraLayers, type, $event.target.checked)">
+          {{ name }} {{ type === 'words' || type === 'chars' ? (layout?.[type]?.length ?? 0) : (layout?.strokes?.[type === 'strokes' ? 'lines' : type]?.length ?? 0) }}
+        </label>
+      </div>
     </div>
     <div class="element-list">
       <template v-if="items.length">
         <button v-for="(item, index) in items" :key="item.id" class="element-item" :class="{ active: selected === item.id }" @click="emit('select', item)">
           <span class="element-index">{{ String(index + 1).padStart(2, '0') }}</span>
-          <span class="element-text"><span class="element-preview">{{ item.text }}</span><span class="element-type">{{ item.type === 'lines' ? 'TEXT LINE' : item.type === 'tables' ? 'TABLE · ' + (activeTab === 'doclayout' ? 'ONNX' : tableStrategy.toUpperCase()) : 'LT TEXT BOX' }}</span></span>
+          <span class="element-text"><span class="element-preview">{{ item.text }}</span><span class="element-type">{{ item.type === 'lines' ? 'TEXT LINE' : item.type === 'tables' ? 'TABLE · ' + (activeTab === 'doclayout' ? 'ONNX' : tableStrategy.toUpperCase()) : item.type === 'textboxes' ? 'LT TEXT BOX' : item.type.toUpperCase() }}</span></span>
         </button>
       </template>
       <div v-else class="list-empty">{{ activeTab === 'doclayout' ? (doclayoutBusy ? '正在运行 CPU 模型…' : doclayoutError ? '模型运行失败，请查看错误' : '当前页未定位到置信度达标的表格') : activeTab === 'camelot' ? (camelotBusy ? '正在识别当前页表格…' : camelotError ? '解析失败，请查看上方错误' : !showTables ? '请勾选 Tables 以显示检测结果' : '当前页使用 ' + tableStrategy.toUpperCase() + ' 未检测到表格，可尝试其他策略') : layout ? '没有匹配的文字元素' : '打开 PDF 后显示布局候选' }}</div>
