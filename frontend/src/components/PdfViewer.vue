@@ -82,8 +82,8 @@ function boxStyle(item) {
   const [x0, y0, x1, y1] = item.bbox
   return {
     left: x0 / w * 100 + '%', top: y0 / h * 100 + '%',
-    width: Math.max(0.15, (x1 - x0) / w * 100) + '%',
-    height: Math.max(0.15, (y1 - y0) / h * 100) + '%',
+    width: Math.max(item.type === 'intersections' ? 0.8 : 0.15, (x1 - x0) / w * 100) + '%',
+    height: Math.max(item.type === 'intersections' ? 0.8 : 0.15, (y1 - y0) / h * 100) + '%',
   }
 }
 function centerOn(item) {

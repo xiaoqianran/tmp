@@ -5,6 +5,7 @@ const props = defineProps(['layout', 'item', 'tableStrategy'])
 const emit = defineEmits(['export', 'copy'])
 const expanded = ref(false)
 const showJson = ref(false)
+const rawOpen = ref(false)
 
 const isWiredTable = computed(() =>
   props.item?.type === 'tables' &&
@@ -34,6 +35,7 @@ const tableText = computed(() => tableRows.value.map(row =>
 watch(() => props.item, () => {
   expanded.value = false
   showJson.value = false
+  rawOpen.value = false
 })
 
 async function copyTable() {
@@ -92,6 +94,14 @@ async function copyTable() {
       <div class="bbox-grid">
         <div v-for="(axis, index) in ['x0','top','x1','bottom']" :key="axis"><span>{{ axis }}</span><strong>{{ item.bbox[index].toFixed(2) }}</strong></div>
       </div>
+      <template v-if="item.properties">
+        <div class="section-label">原生对象属性</div>
+        <div class="property-list">
+          <div v-for="(value, key) in item.properties" :key="key"><span>{{ key }}</span><strong>{{ value }}</strong></div>
+        </div>
+      </template>
+      <button class="button subtle" @click="rawOpen = !rawOpen">{{ rawOpen ? '收起对象 JSON' : '查看对象 JSON' }}</button>
+      <pre v-if="rawOpen" class="detail-content table-data">{{ JSON.stringify(item, null, 2) }}</pre>
       <button class="button subtle copy-detail" @click="emit('copy')">复制文字</button>
     </div>
     <div v-else class="detail-placeholder">点击中间 PDF 标注框，或在左侧元素列表中选取条目。</div>

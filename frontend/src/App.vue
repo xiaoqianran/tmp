@@ -14,8 +14,8 @@ const { docName, documentId, pageCount, pageNum, layout, busy, error, status, op
 const showLines = ref(true)
 const showBoxes = ref(true)
 const showTables = ref(true)
-const extraLayers = ref({ words: false, chars: false, strokes: false, rects: false, curves: false, edges: false })
-const extraTypes = ['words', 'chars', 'strokes', 'rects', 'curves', 'edges']
+const extraLayers = ref({ words: false, chars: false, strokes: false, rects: false, curves: false, edges: false, images: false, intersections: false, cells: false, tableEdges: false })
+const extraTypes = ['words', 'chars', 'strokes', 'rects', 'curves', 'edges', 'images']
 const activeTab = ref('pdfplumber')
 const tableStrategy = ref('text')
 const camelotStrategy = ref('stream')
@@ -101,7 +101,8 @@ const workspaceStyle = computed(() => ({
 const allItems = computed(() => layout.value ? [
   ...layout.value.lines.map((entry, index) => ({ ...entry, type: 'lines', id: 'line-' + index })),
   ...layout.value.textboxes.map((entry, index) => ({ ...entry, type: 'textboxes', id: 'box-' + index })),
-  ...extraTypes.flatMap(type => (type === 'words' || type === 'chars' ? (layout.value[type] || []) : (layout.value.strokes?.[type === 'strokes' ? 'lines' : type] || [])).map((entry, index) => ({ ...entry, type, id: type + '-' + index }))),
+  ...extraTypes.flatMap(type => (['words', 'chars', 'images'].includes(type) ? (layout.value[type] || []) : (layout.value.strokes?.[type === 'strokes' ? 'lines' : type] || [])).map((entry, index) => ({ ...entry, type, id: type + '-' + index }))),
+  ...['intersections', 'cells', 'tableEdges'].flatMap(type => (layout.value.table_debug?.[tableStrategy.value]?.[type === 'tableEdges' ? 'edges' : type] || []).map((entry, index) => ({ ...entry, type, id: type + '-' + index }))),
   ...(activeTab.value === 'doclayout' ? doclayoutTables.value : activeTab.value === 'camelot' ? camelotTables.value : layout.value.tables?.[tableStrategy.value] || []).map((entry, index) => ({
     ...entry, type: 'tables', id: 'table-' + currentStrategy.value + '-' + index,
   })),

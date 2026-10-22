@@ -113,3 +113,19 @@
 .geometry-line.selected{stroke:#e9aa25;stroke-width:3}
 .geometry-hit{position:absolute;background:transparent;border:0;padding:0;margin:0;pointer-events:auto;cursor:pointer}
 .geometry-hit:hover{background:#ffcd4530}
+/* pdfplumber 对象检查器 */
+.layer-groups{display:grid;gap:6px;margin-top:10px}
+.layer-group{border:1px solid #e4eaf3;border-radius:7px;overflow:hidden}
+.layer-heading{width:100%;padding:9px 11px;text-align:left;font-size:12px;font-weight:650;background:#f6f8fc;color:#344866;border:0;cursor:pointer}
+.layer-options{display:grid;gap:7px;padding:10px}
+.layer-options label{display:flex;align-items:center;gap:7px;font-size:11px;color:#52647e;cursor:pointer}
+.layer-options label span{flex:1}
+.layer-options label small{color:#8997aa;font-variant-numeric:tabular-nums}
+.property-list{display:grid;gap:4px;margin:8px 0 12px;max-height:240px;overflow:auto}
+.property-list>div{display:flex;justify-content:space-between;gap:10px;padding:6px 8px;background:#f6f8fc;border-radius:4px;font-size:11px;word-break:break-all}
+.property-list span{color:#74849b;flex-shrink:0}
+.property-list strong{font-weight:500;color:#32445d;text-align:right}
+.bbox.images{border-color:#0c9e9c;background:#0c9e9c12}
+.bbox.cells{border-color:#009e7e;background:#009e7e12}
+.bbox.intersections{border:1px solid #e85151;background:#e85151;border-radius:50%;z-index:3;transform:translate(-50%,-50%)}
+.geometry-line.tableEdges{stroke:#df5151;stroke-width:1.7}

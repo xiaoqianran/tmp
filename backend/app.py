@@ -31,6 +31,9 @@ def object_items(objects, kind):
     for item in objects:
         bbox = [round(float(item[key]), 2) for key in ("x0", "top", "x1", "bottom")]
         result = {"bbox": bbox, "text": str(item.get("text") or kind)}
+        result["properties"] = {key: value for key, value in item.items()
+                                if isinstance(value, (str, int, float, bool, type(None)))
+                                and key not in ("stream", "data")}
         if kind in ("lines", "edges"):
             result["segment"] = [round(float(item[key]), 2) for key in ("x0", "top", "x1", "bottom")]
             if item.get("orientation") == "v" or item.get("width") == 0:
@@ -41,10 +44,25 @@ def object_items(objects, kind):
     return results
 
 
-def detect_tables(page, strategy):
+def debug_tables(finder):
+    """展示 pdfplumber TableFinder 的原生中间结果。"""
+    return {
+        "edges": object_items(finder.edges, "edges"),
+        "intersections": [
+            {"bbox": [round(x, 2), round(y, 2), round(x, 2), round(y, 2)],
+             "text": "Intersection", "properties": {"x": x, "top": y}}
+            for x, y in finder.intersections
+        ],
+        "cells": [{"bbox": [round(float(v), 2) for v in cell], "text": "Cell"}
+                  for cell in finder.cells],
+    }
+
+
+def detect_tables(page, strategy, tables=None):
     """返回表格检测框及抽取内容；单张表格失败不影响其他策略。"""
     settings = {"vertical_strategy": strategy, "horizontal_strategy": strategy}
-    tables = page.find_tables(table_settings=settings)
+    if tables is None:
+        tables = page.find_tables(table_settings=settings)
     results = []
     for index, table in enumerate(tables):
         data = table.extract()
@@ -73,6 +91,18 @@ def detect_tables(page, strategy):
             "cells": cells,
         })
     return results
+
+
+def table_results(page):
+    """每种策略只运行一次 TableFinder，同时输出表格与调试结果。"""
+    tables = {}
+    debugging = {}
+    for strategy in ("lines", "text"):
+        settings = {"vertical_strategy": strategy, "horizontal_strategy": strategy}
+        finder = page.debug_tablefinder(table_settings=settings)
+        tables[strategy] = detect_tables(page, strategy, finder.tables)
+        debugging[strategy] = debug_tables(finder)
+    return tables, debugging
 
 
 @app.get("/api/documents/{document_id}/pages/{number}/doclayout")
@@ -164,6 +194,7 @@ def page_layout(document_id: str, number: int):
     try:
         with pdfplumber.open(path, laparams={}) as pdf:
             page = pdf.pages[number - 1]
+            tables, debugging = table_results(page)
             return {
                 "page": number,
                 "size": [page.width, page.height],
@@ -179,10 +210,9 @@ def page_layout(document_id: str, number: int):
                     "curves": object_items(page.curves, "curves"),
                     "edges": object_items(page.edges, "edges"),
                 },
-                "tables": {
-                    "lines": detect_tables(page, "lines"),
-                    "text": detect_tables(page, "text"),
-                },
+                "images": object_items(page.images, "images"),
+                "table_debug": debugging,
+                "tables": tables,
             }
     except Exception as exc:
         raise HTTPException(422, f"无法解析页面：{exc}") from exc
