@@ -29,14 +29,34 @@ def detect_tables(page, strategy):
     """返回表格检测框及抽取内容；单张表格失败不影响其他策略。"""
     settings = {"vertical_strategy": strategy, "horizontal_strategy": strategy}
     tables = page.find_tables(table_settings=settings)
-    return [
-        {
+    results = []
+    for index, table in enumerate(tables):
+        data = table.extract()
+        # 使用原生单元格坐标恢复合并范围，不根据空文本猜测合并。
+        xs = sorted({x for cell in table.cells for x in (cell[0], cell[2])})
+        ys = sorted({y for cell in table.cells for y in (cell[1], cell[3])})
+        cells = []
+        for row_index, row in enumerate(table.rows):
+            for col_index, bbox in enumerate(row.cells):
+                if bbox is None:
+                    continue
+                x0, top, x1, bottom = bbox
+                start_col = xs.index(x0)
+                start_row = ys.index(top)
+                cells.append({
+                    "row": start_row,
+                    "col": start_col,
+                    "rowspan": ys.index(bottom) - start_row,
+                    "colspan": xs.index(x1) - start_col,
+                    "text": data[row_index][col_index],
+                })
+        results.append({
             "bbox": [round(float(v), 2) for v in table.bbox],
             "text": f"Table {index + 1} · {len(table.rows)} rows",
-            "data": table.extract(),
-        }
-        for index, table in enumerate(tables)
-    ]
+            "data": data,
+            "cells": cells,
+        })
+    return results
 
 
 @app.get("/api/documents/{document_id}/pages/{number}/doclayout")
