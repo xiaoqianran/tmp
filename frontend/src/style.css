@@ -133,3 +133,8 @@
 .element-panel{overflow-y:auto!important;overscroll-behavior:contain}
 .element-panel .inspector-head{flex:none}
 .element-panel .element-list{flex:none;overflow:visible}
+/* 分组标题为紧凑的静态文字，无需点击展开。 */
+.layer-groups{gap:10px}
+.layer-group{border:0;border-radius:0;overflow:visible}
+.layer-heading{padding:2px 0 4px;background:transparent;border:0;border-bottom:1px solid #e9eef5;border-radius:0;color:#8290a4;font-size:10px;font-weight:600;cursor:default}
+.layer-options{padding:5px 0 0;gap:5px}

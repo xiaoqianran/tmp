@@ -1,5 +1,4 @@
 <script setup>
-import { ref } from 'vue'
 defineProps(['layout', 'items', 'selected', 'activeTab', 'tableStrategy', 'showLines', 'showBoxes', 'showTables', 'extraLayers', 'search', 'camelotCount', 'camelotBusy', 'camelotError', 'doclayoutCount', 'doclayoutBusy', 'doclayoutError', 'doclayoutThreshold'])
 const emit = defineEmits(['update:activeTab', 'update:tableStrategy', 'update:showLines', 'update:showBoxes', 'update:showTables', 'update:extraLayers', 'update:search', 'update:doclayoutThreshold', 'select'])
 const groups = [
@@ -7,7 +6,6 @@ const groups = [
   { title: '绘图与图像', layers: { strokes: 'Lines · 直线', rects: 'Rects · 矩形', curves: 'Curves · 曲线', edges: 'Edges · 边缘', images: 'Images · 图像' } },
   { title: '表格调试', layers: { tableEdges: '候选 Edges', intersections: 'Intersections · 交点', cells: 'Cells · 单元格' } },
 ]
-const opened = ref([true, false, false])
 function count(layout, type, strategy) {
   if (!layout) return 0
   if (['words', 'chars', 'images'].includes(type)) return layout[type]?.length ?? 0
@@ -39,9 +37,9 @@ function toggleLayer(layers, type, checked) {
         <label><input type="checkbox" :checked="showTables" @change="emit('update:showTables', $event.target.checked)"> <span class="legend-dot green"></span> Tables {{ activeTab === 'doclayout' ? doclayoutCount : activeTab === 'camelot' ? camelotCount : (layout?.tables?.[tableStrategy]?.length ?? 0) }}</label>
       </div>
       <div v-if="activeTab === 'pdfplumber'" class="layer-groups">
-        <section v-for="(group, index) in groups" :key="group.title" class="layer-group">
-          <button class="layer-heading" @click="opened[index] = !opened[index]">{{ opened[index] ? '▾' : '▸' }} {{ group.title }}</button>
-          <div v-if="opened[index]" class="layer-options">
+        <section v-for="group in groups" :key="group.title" class="layer-group">
+          <div class="layer-heading">{{ group.title }}</div>
+          <div class="layer-options">
             <label v-for="(name, type) in group.layers" :key="type">
               <input type="checkbox" :checked="extraLayers[type]" @change="toggleLayer(extraLayers, type, $event.target.checked)">
               <span>{{ name }}</span><small>{{ count(layout, type, tableStrategy) }}</small>
