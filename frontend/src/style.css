@@ -159,3 +159,7 @@
 .bbox.matches{border:2px solid #e1a325;background:#ffd34035;z-index:6}
 .bbox.hyperlinks{border:1px dashed #477cf5;background:#477cf512}
 .bbox.annotations{border:1px dashed #c16e32;background:#c16e3212}
+.scope-picker{display:flex;gap:6px}
+.scope-picker button{flex:1;padding:6px;border:1px solid #dce4ef;border-radius:5px;background:#fff;color:#53657d;font-size:11px}
+.scope-picker button.active{background:#e5f7f1;border-color:#04a684;color:#00856b;font-weight:700}
+.scope-picker button:disabled{opacity:.4;cursor:not-allowed}

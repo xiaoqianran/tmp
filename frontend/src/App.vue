@@ -37,23 +37,25 @@ const inspectDefaults = { snap_tolerance: 3, join_tolerance: 3, intersection_tol
 const inspectSettings = ref({ ...inspectDefaults })
 const cropMode = ref(false)
 const cropBox = ref(null)
+const inspectScope = ref('page')
 const inspectResult = ref(null)
 const inspectBusy = ref(false)
 const inspectError = ref('')
 const inspectCache = new Map()
 let inspectRequest = 0
-watch([documentId, pageNum], () => { cropBox.value = null; inspectResult.value = null; cropMode.value = false; searchTerm.value = ''; inspectCache.clear() })
-watch([documentId, pageNum, inspectSettings, cropBox, searchTerm, activeTab], async () => {
+watch([documentId, pageNum], () => { cropBox.value = null; inspectScope.value = 'page'; inspectResult.value = null; cropMode.value = false; searchTerm.value = ''; inspectCache.clear() })
+watch([documentId, pageNum, inspectSettings, cropBox, inspectScope, searchTerm, activeTab], async () => {
   const request = ++inspectRequest
   inspectResult.value = null
   inspectError.value = ''
   inspectBusy.value = false
   if (!documentId.value || !pageNum.value || activeTab.value !== 'pdfplumber') return
-  const key = JSON.stringify([documentId.value, pageNum.value, inspectSettings.value, cropBox.value, searchTerm.value])
+  const bbox = inspectScope.value === 'crop' ? cropBox.value : null
+  const key = JSON.stringify([documentId.value, pageNum.value, inspectSettings.value, bbox, searchTerm.value])
   if (inspectCache.has(key)) { inspectResult.value = inspectCache.get(key); return }
   inspectBusy.value = true
   try {
-    const result = await inspectPage(documentId.value, pageNum.value, { ...inspectSettings.value, bbox: cropBox.value, search: searchTerm.value })
+    const result = await inspectPage(documentId.value, pageNum.value, { ...inspectSettings.value, bbox, search: searchTerm.value })
     if (request !== inspectRequest) return
     inspectCache.set(key, result)
     if (inspectCache.size > 12) inspectCache.delete(inspectCache.keys().next().value)
@@ -61,7 +63,7 @@ watch([documentId, pageNum, inspectSettings, cropBox, searchTerm, activeTab], as
   } catch (err) { if (request === inspectRequest) inspectError.value = err.message || String(err) }
   finally { if (request === inspectRequest) inspectBusy.value = false }
 }, { deep: true })
-const inspectedLayout = computed(() => layout.value && inspectResult.value ? { ...layout.value, tables: inspectResult.value.tables, table_debug: inspectResult.value.table_debug, matches: inspectResult.value.matches } : layout.value)
+const inspectedLayout = computed(() => layout.value && inspectResult.value ? { ...layout.value, ...inspectResult.value, size: layout.value.size } : layout.value)
 const camelotStrategy = ref('stream')
 const camelotResults = ref({})
 const camelotBusy = ref(false)
@@ -142,10 +144,10 @@ const workspaceStyle = computed(() => ({
     ...(rightOpen.value ? ['6px', rightWidth.value + 'px'] : []),
   ].join(' '),
 }))
-const allItems = computed(() => layout.value ? [
-  ...layout.value.lines.map((entry, index) => ({ ...entry, type: 'lines', id: 'line-' + index })),
-  ...layout.value.textboxes.map((entry, index) => ({ ...entry, type: 'textboxes', id: 'box-' + index })),
-  ...extraTypes.flatMap(type => (['words', 'chars', 'images', 'hyperlinks', 'annotations'].includes(type) ? (layout.value[type] || []) : (layout.value.strokes?.[type === 'strokes' ? 'lines' : type] || [])).map((entry, index) => ({ ...entry, type, id: type + '-' + index }))),
+const allItems = computed(() => inspectedLayout.value ? [
+  ...(inspectedLayout.value.lines || []).map((entry, index) => ({ ...entry, type: 'lines', id: 'line-' + index })),
+  ...(inspectedLayout.value.textboxes || []).map((entry, index) => ({ ...entry, type: 'textboxes', id: 'box-' + index })),
+  ...extraTypes.flatMap(type => (['words', 'chars', 'images', 'hyperlinks', 'annotations'].includes(type) ? (inspectedLayout.value[type] || []) : (inspectedLayout.value.strokes?.[type === 'strokes' ? 'lines' : type] || [])).map((entry, index) => ({ ...entry, type, id: type + '-' + index }))),
   ...['intersections', 'cells', 'tableEdges'].flatMap(type => (inspectedLayout.value.table_debug?.[tableStrategy.value]?.[type === 'tableEdges' ? 'edges' : type] || []).map((entry, index) => ({ ...entry, type, id: type + '-' + index }))),
   ...(inspectedLayout.value.matches || []).map((entry, index) => ({ ...entry, type: 'matches', id: 'match-' + index })),
   ...(activeTab.value === 'doclayout' ? doclayoutTables.value : activeTab.value === 'camelot' ? camelotTables.value : inspectedLayout.value.tables?.[tableStrategy.value] || []).map((entry, index) => ({
@@ -291,9 +293,10 @@ onUnmounted(() => {
 
     <div class="workspace" :style="workspaceStyle">
       <ElementPanel v-show="leftOpen" :layout="inspectedLayout" :items="filteredItems" :selected="selected"
-        :inspectSettings="inspectSettings" :inspectResult="inspectResult" :inspectBusy="inspectBusy" :inspectError="inspectError" :cropBox="cropBox"
+        :inspectSettings="inspectSettings" :inspectResult="inspectResult" :inspectBusy="inspectBusy" :inspectError="inspectError" :cropBox="cropBox" :inspectScope="inspectScope"
+        @update:inspectScope="inspectScope = $event; cropMode = false"
         :searchTerm="searchTerm" :soloType="soloType" @searchInspect="searchTerm = $event" @soloLayer="isolateLayer"
-        @update:inspectSettings="inspectSettings = $event" @resetInspect="inspectSettings = { ...inspectDefaults }; cropBox = null"
+        @update:inspectSettings="inspectSettings = $event" @resetInspect="inspectSettings = { ...inspectDefaults }; cropBox = null; inspectScope = 'page'"
         v-model:activeTab="activeTab" v-model:tableStrategy="currentStrategy"
         v-model:showLines="showLines" v-model:showBoxes="showBoxes" v-model:showTables="showTables"
         v-model:search="search" v-model:extraLayers="extraLayers" :camelotCount="camelotTables.length" :camelotBusy="camelotBusy" :camelotError="camelotError"
@@ -304,7 +307,7 @@ onUnmounted(() => {
         <nav class="toolbar">
           <div class="tools-left">
             <button v-if="activeTab === 'pdfplumber'" class="button subtle" :class="{ active: cropMode }" :disabled="!layout" @click="cropMode = !cropMode">{{ cropMode ? '取消框选' : '框选解析' }}</button>
-            <button v-if="activeTab === 'pdfplumber' && cropBox" class="button subtle" @click="cropBox = null">清除区域</button>
+            <button v-if="activeTab === 'pdfplumber' && cropBox" class="button subtle" @click="inspectScope = 'page'">整页解析</button>
             <button class="icon-button panel-toggle" title="切换元素列表" @click="leftOpen = !leftOpen">☷</button>
             <button class="icon-button panel-toggle thumbnail-toggle" title="切换页面预览" :aria-pressed="thumbnailsOpen" @click="thumbnailsOpen = !thumbnailsOpen">▤</button>
             <div class="page-controls">
@@ -330,8 +333,8 @@ onUnmounted(() => {
         <div class="pdf-reading-space">
           <ThumbnailSidebar v-if="thumbnailsOpen" :documentId="documentId" :pageCount="pageCount"
             :pageNum="pageNum" :getPage="getPdfPage" @navigate="loadPage" />
-          <PdfViewer ref="pdfViewer" :layout="layout" :items="overlayItems" :selected="selected" :cropMode="cropMode" :cropBox="cropBox"
-            :status="status" @select="choose" @open="input?.click()" @crop="cropBox = $event; cropMode = false" />
+          <PdfViewer ref="pdfViewer" :layout="layout" :items="overlayItems" :selected="selected" :cropMode="cropMode" :cropBox="inspectScope === 'crop' ? cropBox : null"
+            :status="status" @select="choose" @open="input?.click()" @crop="cropBox = $event; inspectScope = 'crop'; cropMode = false" />
         </div>
         <div class="viewer-footer"><span><span class="footer-dot"></span>{{ status }}</span><span class="shortcuts">Ctrl + 滚轮缩放 <i>·</i> A/D / ← → 翻页 <i>·</i> W/S / ↑ ↓ 竖向滚动</span></div>
       </section>

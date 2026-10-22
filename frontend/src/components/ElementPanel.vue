@@ -1,6 +1,6 @@
 <script setup>
-defineProps(['layout', 'items', 'selected', 'activeTab', 'tableStrategy', 'showLines', 'showBoxes', 'showTables', 'extraLayers', 'search', 'camelotCount', 'camelotBusy', 'camelotError', 'doclayoutCount', 'doclayoutBusy', 'doclayoutError', 'doclayoutThreshold', 'inspectSettings', 'inspectResult', 'inspectBusy', 'inspectError', 'cropBox', 'searchTerm', 'soloType'])
-const emit = defineEmits(['update:activeTab', 'update:tableStrategy', 'update:showLines', 'update:showBoxes', 'update:showTables', 'update:extraLayers', 'update:search', 'update:doclayoutThreshold', 'update:inspectSettings', 'resetInspect', 'searchInspect', 'soloLayer', 'select'])
+defineProps(['layout', 'items', 'selected', 'activeTab', 'tableStrategy', 'showLines', 'showBoxes', 'showTables', 'extraLayers', 'search', 'camelotCount', 'camelotBusy', 'camelotError', 'doclayoutCount', 'doclayoutBusy', 'doclayoutError', 'doclayoutThreshold', 'inspectSettings', 'inspectResult', 'inspectBusy', 'inspectError', 'cropBox', 'inspectScope', 'searchTerm', 'soloType'])
+const emit = defineEmits(['update:activeTab', 'update:tableStrategy', 'update:showLines', 'update:showBoxes', 'update:showTables', 'update:extraLayers', 'update:search', 'update:doclayoutThreshold', 'update:inspectSettings', 'update:inspectScope', 'resetInspect', 'searchInspect', 'soloLayer', 'select'])
 const parameters = { snap_tolerance: '吸附 Snap', join_tolerance: '连接 Join', intersection_tolerance: '交点 Intersection', edge_min_length: '最短边 Edge' }
 const groups = [
   { title: '文字与布局', layers: { words: 'Words · 单词', chars: 'Chars · 字符', matches: '搜索命中' } },
@@ -50,6 +50,12 @@ function toggleLayer(layers, type, checked) {
         </section>
       </div>
       <section v-if="activeTab === 'pdfplumber'" class="inspect-controls">
+        <div class="layer-heading">解析范围</div>
+        <div class="scope-picker">
+          <button :class="{ active: inspectScope === 'page' }" @click="emit('update:inspectScope', 'page')">整页</button>
+          <button :disabled="!cropBox" :class="{ active: inspectScope === 'crop' }" @click="emit('update:inspectScope', 'crop')">局部</button>
+        </div>
+        <p class="inspect-status">{{ inspectError ? '解析失败：' + inspectError : inspectBusy ? '解析中…' : inspectResult ? (inspectScope === 'crop' ? '局部解析完成' : '整页解析完成') : '尚未取得结果' }}</p>
         <div class="layer-heading">原文搜索（回车定位）</div>
         <form class="search-wrap" @submit.prevent="emit('searchInspect', $event.target.elements.query.value.trim())">
           <input name="query" type="text" :value="searchTerm" placeholder="查找 PDF 文字" maxlength="100">

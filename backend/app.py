@@ -115,6 +115,26 @@ def table_results(page, custom=None):
     return tables, debugging
 
 
+def page_objects(page):
+    """整页和框选区域共用同一套对象提取，保持 PDF 原坐标。"""
+    return {
+        "size": [page.width, page.height],
+        "lines": layout_items(page.extract_text_lines(strip=True, return_chars=False)),
+        "textboxes": layout_items(page.objects.get("textboxhorizontal", []) + page.objects.get("textboxvertical", [])),
+        "words": object_items(page.extract_words(), "words"),
+        "chars": object_items(page.chars, "chars"),
+        "strokes": {
+            "lines": object_items(page.lines, "lines"),
+            "rects": object_items(page.rects, "rects"),
+            "curves": object_items(page.curves, "curves"),
+            "edges": object_items(page.edges, "edges"),
+        },
+        "images": object_items(page.images, "images"),
+        "hyperlinks": object_items(page.hyperlinks, "hyperlinks"),
+        "annotations": object_items(page.annots or [], "annotations"),
+    }
+
+
 class InspectOptions(BaseModel):
     bbox: list[float] | None = None
     search: str = Field("", max_length=100)
@@ -141,6 +161,7 @@ def inspect_page(document_id: str, number: int, options: InspectOptions):
                 page = page.crop((x0, top, x1, bottom))
             tables, debugging = table_results(page, settings)
             return {
+                **page_objects(page),
                 "tables": tables, "table_debug": debugging,
                 "matches": object_items(page.search(options.search, regex=False), "matches") if options.search.strip() else [],
                 "text": {
@@ -249,22 +270,7 @@ def page_layout(document_id: str, number: int):
             tables, debugging = table_results(page)
             return {
                 "page": number,
-                "size": [page.width, page.height],
-                "lines": layout_items(page.extract_text_lines(strip=True, return_chars=False)),
-                "textboxes": layout_items(
-                    page.objects.get("textboxhorizontal", []) + page.objects.get("textboxvertical", [])
-                ),
-                "words": object_items(page.extract_words(), "words"),
-                "chars": object_items(page.chars, "chars"),
-                "strokes": {
-                    "lines": object_items(page.lines, "lines"),
-                    "rects": object_items(page.rects, "rects"),
-                    "curves": object_items(page.curves, "curves"),
-                    "edges": object_items(page.edges, "edges"),
-                },
-                "images": object_items(page.images, "images"),
-                "hyperlinks": object_items(page.hyperlinks, "hyperlinks"),
-                "annotations": object_items(page.annots or [], "annotations"),
+                **page_objects(page),
                 "table_debug": debugging,
                 "tables": tables,
             }
