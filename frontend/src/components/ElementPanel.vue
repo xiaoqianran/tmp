@@ -3,13 +3,14 @@ defineProps(['layout', 'items', 'selected', 'activeTab', 'tableStrategy', 'showL
 const emit = defineEmits(['update:activeTab', 'update:tableStrategy', 'update:showLines', 'update:showBoxes', 'update:showTables', 'update:extraLayers', 'update:search', 'update:doclayoutThreshold', 'update:inspectSettings', 'update:inspectScope', 'resetInspect', 'searchInspect', 'soloLayer', 'select'])
 const parameters = { snap_tolerance: '吸附 Snap', join_tolerance: '连接 Join', intersection_tolerance: '交点 Intersection', edge_min_length: '最短边 Edge' }
 const groups = [
-  { title: '文字与布局', layers: { words: 'Words · 单词', chars: 'Chars · 字符', matches: '搜索命中' } },
+  { title: '文字与布局', layers: { words: 'Words · 单词', chars: 'Chars · 字符', bold: 'Bold · 粗体', matches: '搜索命中' } },
   { title: '绘图与图像', layers: { strokes: 'Lines · 直线', rects: 'Rects · 矩形', curves: 'Curves · 曲线', edges: 'Edges · 边缘', images: 'Images · 图像' } },
   { title: '表格调试', layers: { tableEdges: '候选 Edges', intersections: 'Intersections · 交点', cells: 'Cells · 单元格' } },
   { title: '文档结构', layers: { hyperlinks: 'Hyperlinks · 链接', annotations: 'Annotations · 注释' } },
 ]
 function count(layout, type, strategy) {
   if (!layout) return 0
+  if (type === 'bold') return (layout.chars || []).filter(item => /bold|black|heavy|semibold|demibold/i.test(item.properties?.fontname || '')).length
   if (['words', 'chars', 'images', 'matches', 'hyperlinks', 'annotations'].includes(type)) return layout[type]?.length ?? 0
   if (['tableEdges', 'intersections', 'cells'].includes(type)) return layout.table_debug?.[strategy]?.[type === 'tableEdges' ? 'edges' : type]?.length ?? 0
   return layout.strokes?.[type === 'strokes' ? 'lines' : type]?.length ?? 0

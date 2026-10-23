@@ -14,8 +14,8 @@ const { docName, documentId, pageCount, pageNum, layout, busy, error, status, op
 const showLines = ref(true)
 const showBoxes = ref(true)
 const showTables = ref(true)
-const extraLayers = ref({ words: false, chars: false, strokes: false, rects: false, curves: false, edges: false, images: false, intersections: false, cells: false, tableEdges: false, matches: true, hyperlinks: false, annotations: false })
-const extraTypes = ['words', 'chars', 'strokes', 'rects', 'curves', 'edges', 'images', 'hyperlinks', 'annotations']
+const extraLayers = ref({ words: false, chars: false, bold: false, strokes: false, rects: false, curves: false, edges: false, images: false, intersections: false, cells: false, tableEdges: false, matches: true, hyperlinks: false, annotations: false })
+const extraTypes = ['words', 'chars', 'bold', 'strokes', 'rects', 'curves', 'edges', 'images', 'hyperlinks', 'annotations']
 const searchTerm = ref('')
 const soloType = ref('')
 let savedLayers = null
@@ -144,10 +144,13 @@ const workspaceStyle = computed(() => ({
     ...(rightOpen.value ? ['6px', rightWidth.value + 'px'] : []),
   ].join(' '),
 }))
+const boldChars = computed(() => (inspectedLayout.value?.chars || []).filter(item =>
+  /bold|black|heavy|semibold|demibold/i.test(item.properties?.fontname || '')
+))
 const allItems = computed(() => inspectedLayout.value ? [
   ...(inspectedLayout.value.lines || []).map((entry, index) => ({ ...entry, type: 'lines', id: 'line-' + index })),
   ...(inspectedLayout.value.textboxes || []).map((entry, index) => ({ ...entry, type: 'textboxes', id: 'box-' + index })),
-  ...extraTypes.flatMap(type => (['words', 'chars', 'images', 'hyperlinks', 'annotations'].includes(type) ? (inspectedLayout.value[type] || []) : (inspectedLayout.value.strokes?.[type === 'strokes' ? 'lines' : type] || [])).map((entry, index) => ({ ...entry, type, id: type + '-' + index }))),
+  ...extraTypes.flatMap(type => (type === 'bold' ? boldChars.value : ['words', 'chars', 'images', 'hyperlinks', 'annotations'].includes(type) ? (inspectedLayout.value[type] || []) : (inspectedLayout.value.strokes?.[type === 'strokes' ? 'lines' : type] || [])).map((entry, index) => ({ ...entry, type, id: type + '-' + index }))),
   ...['intersections', 'cells', 'tableEdges'].flatMap(type => (inspectedLayout.value.table_debug?.[tableStrategy.value]?.[type === 'tableEdges' ? 'edges' : type] || []).map((entry, index) => ({ ...entry, type, id: type + '-' + index }))),
   ...(inspectedLayout.value.matches || []).map((entry, index) => ({ ...entry, type: 'matches', id: 'match-' + index })),
   ...(activeTab.value === 'doclayout' ? doclayoutTables.value : activeTab.value === 'camelot' ? camelotTables.value : inspectedLayout.value.tables?.[tableStrategy.value] || []).map((entry, index) => ({
